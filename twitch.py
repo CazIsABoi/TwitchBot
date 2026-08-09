@@ -4,7 +4,7 @@ from pathlib import Path
 
 from twitchAPI.twitch import Twitch
 from twitchAPI.oauth import UserAuthenticator
-from twitchAPI.type import AuthScope, ChatEvent
+from twitchAPI.type import AuthScope, ChatEvent, TwitchAuthorizationException
 from twitchAPI.chat import Chat, EventData, ChatMessage, ChatSub, ChatCommand
 from twitchAPI.eventsub.websocket import EventSubWebsocket
 from twitchAPI.object.eventsub import (
@@ -217,16 +217,26 @@ async def on_stream_online(data: StreamOnlineEvent):
 
 async def run():
     if not APP_ID or not APP_SECRET:
-        print("❌ APP_ID and APP_SECRET are required. Copy .env.example to .env and fill them in.")
+        print("❌ APP_ID and APP_SECRET are required. Copy env.example to .env and fill them in.")
         return
     if not TARGET_CHANNEL:
-        print("❌ TARGET_CHANNEL is required in .env")
+        print("❌ TARGET_CHANNEL is required in .env (or env)")
         return
 
     load_ignored_chatters()
     load_rewards_config()
 
-    twitch = await Twitch(APP_ID, APP_SECRET)
+    try:
+        twitch = await Twitch(APP_ID, APP_SECRET)
+    except TwitchAuthorizationException as error:
+        message = str(error)
+        if "invalid client secret" in message.lower():
+            print("❌ Twitch authentication failed: invalid APP_SECRET for this APP_ID.")
+            print("   Open Twitch Dev Console, copy the current Client Secret, and update your .env/env file.")
+        else:
+            print(f"❌ Twitch authentication failed: {message}")
+        return
+
     await authenticate_twitch(twitch)
 
     chat = await Chat(twitch)

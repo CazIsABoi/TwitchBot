@@ -2,7 +2,7 @@
 Twitch Bot Configuration
 
 Secrets (APP_ID, APP_SECRET, OBS_PASSWORD, etc.) load from a local .env file.
-Copy .env.example -> .env and fill in real values. Never commit .env.
+Copy env.example -> .env and fill in real values. Never commit .env.
 Non-secret tuning knobs stay here so they are easy to edit.
 """
 import os
@@ -11,7 +11,15 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 _BOT_ROOT = Path(__file__).resolve().parent
-load_dotenv(_BOT_ROOT / ".env")
+
+# Prefer standard .env, but fall back to legacy env filename if present.
+_DOTENV_PATH = _BOT_ROOT / ".env"
+if _DOTENV_PATH.exists():
+    load_dotenv(_DOTENV_PATH)
+else:
+    _LEGACY_DOTENV_PATH = _BOT_ROOT / "env"
+    if _LEGACY_DOTENV_PATH.exists():
+        load_dotenv(_LEGACY_DOTENV_PATH)
 
 
 def _env(key: str, default: str = "") -> str:
@@ -108,6 +116,6 @@ IGNORED_CHATTERS_FILE = _BOT_ROOT / "ignored_chatters.json"
 
 # Fail fast if required secrets are missing (helps onboarding)
 if not APP_ID or not APP_SECRET:
-    print("⚠️ APP_ID / APP_SECRET missing. Copy .env.example to .env and fill them in.")
+    print("⚠️ APP_ID / APP_SECRET missing. Copy env.example to .env and fill them in.")
 if not TARGET_CHANNEL:
-    print("⚠️ TARGET_CHANNEL missing in .env")
+    print("⚠️ TARGET_CHANNEL missing in .env (or env)")
