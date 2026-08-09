@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            overflow: hidden;
+        }
+        body {
+            display: grid;
+            place-items: center;
+            box-sizing: border-box;
+            padding: 24px;
+        }
+        #caption {
+            max-width: 95%;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 18px 24px;
+            border-radius: 18px;
+            background: rgba(0, 0, 0, 0.72);
+            color: #fff;
+            font: 800 44px/1.28 Arial, sans-serif;
+            text-align: center;
+            text-shadow:
+                -2px -2px 0 #000,
+                0 -2px 0 #000,
+                2px -2px 0 #000,
+                -2px 0 0 #000,
+                2px 0 0 #000,
+                -2px 2px 0 #000,
+                0 2px 0 #000,
+                2px 2px 0 #000,
+                0 4px 10px rgba(0, 0, 0, 0.8);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            opacity: 0;
+            transform: scale(0.98);
+            transition: opacity 220ms ease, transform 220ms ease;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+        #caption.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+        #speakerLine {
+            display: block;
+            margin-bottom: 8px;
+            color: #9146FF;
+            font-weight: 900;
+            font-size: 0.95em;
+            line-height: 1.1;
+            text-align: center;
+        }
+        #messageLine {
+            display: block;
+            color: #ffffff;
+            font-size: 1em;
+            line-height: 1.25;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="caption"></div>
+    <script>
+        const caption = document.getElementById('caption');
+        const seenTokens = new Set();
+        const expectedSessionId = '{AUDIO_BRIDGE_SESSION_ID}';
+        const pageLoadMs = Date.now();
+        let captionClearTimer = null;
+
+        function showCaption(event) {
+            const speaker = event.speaker || '';
+            const messageText = event.text || event.caption || '';
+
+            if (!event.caption && !speaker && !messageText) {
+                return;
+            }
+
+            if (captionClearTimer) {
+                clearTimeout(captionClearTimer);
+                captionClearTimer = null;
+            }
+
+            caption.innerHTML = speaker
+                ? `<span id="speakerLine">${escapeHtml(speaker)}</span><span id="messageLine">${escapeHtml(messageText)}</span>`
+                : `<span id="messageLine">${escapeHtml(messageText)}</span>`;
+
+            caption.classList.add('visible');
+            hideCaptionLater(5000);
+        }
+
+        function hideCaptionLater(delayMs) {
+            if (captionClearTimer) {
+                clearTimeout(captionClearTimer);
+            }
+
+            captionClearTimer = setTimeout(() => {
+                caption.classList.remove('visible');
+                setTimeout(() => {
+                    if (!caption.classList.contains('visible')) {
+                        caption.innerHTML = '';
+                    }
+                }, 260);
+            }, delayMs);
+        }
+
+        function handleEvent(event) {
+            if (!event || !event.token) {
+                return;
+            }
+
+            const createdAt = Number(event.created_at || 0);
+            if (event.session_id) {
+                if (event.session_id !== expectedSessionId) {
+                    return;
+                }
+            } else if (!createdAt || createdAt < (pageLoadMs - 2000)) {
+                return;
+            }
+
+            // Text-only source: render captions for explicit caption events
+            // and also for TTS audio events that carry text metadata.
+            if (event.kind === 'caption' || (event.mode || '') === 'tts') {
+                showCaption(event);
+            }
+        }
+
+        async function pollAudioState() {
+            try {
+                const response = await fetch('/bridge/tts_audio_state.json?ts=' + Date.now(), { cache: 'no-store' });
+                if (!response.ok) return;
+
+                const state = await response.json();
+                const events = Array.isArray(state.events) ? state.events : [];
+
+                for (const event of events) {
+                    if (!event || !event.token || seenTokens.has(event.token)) {
+                        continue;
+                    }
+                    seenTokens.add(event.token);
+                    handleEvent(event);
+                }
+
+                if (seenTokens.size > 5000) {
+                    seenTokens.clear();
+                }
+            } catch (error) {
+                // Keep polling while idle.
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        setInterval(pollAudioState, 150);
+        pollAudioState();
+    </script>
+</body>
+</html>

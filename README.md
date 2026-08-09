@@ -1,13 +1,6 @@
 # TwitchBot (Main Bot)
 
-This is the original/main Twitch channel points bot.
-
-It supports:
-- Channel point reward handlers
-- TTS rewards (male/female + accent variants)
-- Sound effects routed into OBS via browser source
-- Fullscreen overlay effects (flashbang style)
-- Caption layout editor in browser
+Channel points bot with OBS overlays, TTS, sound effects, and first-chatter celebrations.
 
 ## 1) Quick Start
 
@@ -21,26 +14,43 @@ It supports:
 pip install -r requirements.txt
 ```
 
-### Configure
-Edit `config.py` and set:
-- `APP_ID`
-- `APP_SECRET`
-- `TARGET_CHANNEL`
-- `OBS_HOST`
-- `OBS_PORT`
-- `OBS_PASSWORD`
-- OBS source names:
-  - `OBS_TTS_SOURCE`
-  - `OBS_OVERLAY_SOURCE`
-  - `OBS_WEBCAM_SOURCE`
-  - `OBS_DISPLAY_SOURCE`
+### Configure secrets
+1. Copy the example env file:
+   ```powershell
+   copy .env.example .env
+   ```
+2. Edit `.env` and set:
+   - `APP_ID` / `APP_SECRET` from [Twitch Dev Console](https://dev.twitch.tv/console)
+   - `TARGET_CHANNEL` (your channel login, lowercase)
+   - `OBS_PASSWORD` (and host/port if needed)
+
+**Security:** rotate `APP_SECRET` in the Twitch console and your OBS WebSocket password after sharing any old copies of this project. Never commit `.env` or `twitch_tokens.json`.
+
+Non-secret tuning (OBS source names, flashbang timings, audio mode) still lives in `config.py`.
+
+### Configure reward titles
+Edit `rewards_config.json` to map **Twitch reward titles** to bot actions. Rename a reward in the Creator Dashboard? Update the title string in this JSON — no Python changes needed.
+
+Simple sound effects only need a title + file path:
+```json
+{
+  "titles": ["My New Sound"],
+  "action": "play_sound",
+  "params": { "file": "sounds/mysound.mp3" }
+}
+```
+
+Built-in actions: `play_sound`, `flashbang`, `stream_ender`, `hide_cam`, `tts`, `spelling_bee`.
+
+### First-chatter bots to ignore
+Edit `ignored_chatters.json` (includes `streamelements`, `nightbot`, etc.). Names are matched case-insensitively against chat logins.
 
 ### Run
 ```powershell
 python twitch.py
 ```
 
-First run opens Twitch auth in browser.
+First run opens Twitch auth in the browser. First-chatter resets automatically on **stream.online** (EventSub).
 
 ## 2) OBS Setup (Required)
 
@@ -58,55 +68,37 @@ Put `RewardOverlay` above gameplay/camera sources.
 
 ## 3) Layout Editor
 
-Open:
 ```powershell
 python open_layout_editor.py
 ```
 
-Or browse directly:
-- `http://127.0.0.1:8765/bridge/layout_editor.html`
-
-Use it to position/size caption text and save layout.
+Or open `http://127.0.0.1:8765/bridge/layout_editor.html`
 
 ## 4) Common Commands
 
-Run OBS diagnostics:
 ```powershell
 python obs_diagnostics.py
 ```
 
-This checks:
-- OBS websocket connection
-- Scene/source names
-- Bridge URLs
-
 ## 5) Troubleshooting
 
 ### No TTS/audio in OBS
-- Confirm bot is running
-- Confirm TTS browser source URL is exactly:
-  - `http://127.0.0.1:8765/bridge/tts_audio_bridge.html`
+- Confirm bot is running and browser source URL is exact
 - Refresh browser source cache in OBS
 - Run `python obs_diagnostics.py`
 
-### Overlay/flash effects do not appear
-- Confirm overlay source URL is exactly:
-  - `http://127.0.0.1:8765/bridge/overlay_temp.html`
-- Ensure `RewardOverlay` is above gameplay in scene order
+### Overlay/flash effects missing
+- Confirm overlay URL and scene order (`RewardOverlay` on top)
 
-### OBS source name warnings in diagnostics
-- Update names in `config.py` to match OBS exactly (case-sensitive)
+### Reward titles not triggering
+- Titles in Twitch must match an entry in `rewards_config.json` (case-insensitive)
+- Restart the bot after editing the JSON
 
-### Bot starts but no redemptions trigger
-- Ensure reward titles in Twitch match handler names in `rewards.py`
-- Re-run `python twitch.py` and complete auth flow
+### StreamElements won first chatter
+- Confirm the bot login is in `ignored_chatters.json` (default includes `streamelements`)
+- Look for log line: `⏭️ Skipping ignored chatter for first-message: streamelements`
+- First chatter now resets on each `stream.online`, not only on bot start
 
-## 6) Docs
-
-More docs are in `docs/`:
-- `docs/QUICK_START.md`
-- `docs/setup_instructions.md`
-- `docs/TTS_GUIDE.md`
-- `docs/TTS_VIEWER_GUIDE.md`
-- `docs/AUDIO_ROUTING_GUIDE.md`
-- `docs/examples.md`
+### Secrets / auth failures
+- Re-check `.env` values
+- Delete `twitch_tokens.json` and re-authenticate if scopes changed

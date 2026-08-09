@@ -1,0 +1,482 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            overflow: hidden;
+        }
+        body {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 0 48px 64px;
+            box-sizing: border-box;
+        }
+        audio {
+            display: none;
+        }
+        #caption {
+            position: absolute;
+            max-width: 95%;
+            width: 1280px;
+            max-height: 720px;
+            box-sizing: border-box;
+            padding: 18px 24px;
+            border-radius: 18px;
+            background: rgba(0, 0, 0, 0.72);
+            color: #fff;
+            font: 800 44px/1.28 Arial, sans-serif;
+            text-align: left;
+            text-shadow:
+                -2px -2px 0 #000,
+                0 -2px 0 #000,
+                2px -2px 0 #000,
+                -2px 0 0 #000,
+                2px 0 0 #000,
+                -2px 2px 0 #000,
+                0 2px 0 #000,
+                2px 2px 0 #000,
+                0 4px 10px rgba(0, 0, 0, 0.8);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            opacity: 0;
+            transform: translateY(12px);
+            transition: opacity 220ms ease, transform 220ms ease;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+        #caption.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        #speakerLine {
+            display: block;
+            margin-bottom: 8px;
+            color: #9146FF;
+            font-weight: 900;
+            font-size: 0.95em;
+            line-height: 1.1;
+            text-align: center;
+        }
+        #messageLine {
+            display: block;
+            color: #ffffff;
+            font-size: 1em;
+            line-height: 1.25;
+        }
+        #spellingCard {
+            position: absolute;
+            top: 42px;
+            left: 50%;
+            transform: translateX(-50%) scale(0.98);
+            width: min(88vw, 980px);
+            padding: 20px 28px;
+            border-radius: 20px;
+            border: 2px solid rgba(255, 235, 170, 0.55);
+            background:
+                radial-gradient(circle at 12% 20%, rgba(255, 240, 180, 0.24), rgba(255, 240, 180, 0) 42%),
+                linear-gradient(130deg, rgba(18, 24, 44, 0.92), rgba(8, 12, 24, 0.94));
+            box-shadow:
+                0 16px 45px rgba(0, 0, 0, 0.45),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+            color: #f8fbff;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 220ms ease, transform 220ms ease;
+        }
+        #spellingCard.visible {
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+        }
+        #spellingLabel {
+            font: 900 22px/1.1 "Segoe UI", sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.09em;
+            color: #ffe89a;
+            margin-bottom: 12px;
+        }
+        #spellingWord {
+            font: 900 64px/1.05 "Segoe UI", sans-serif;
+            letter-spacing: 0.04em;
+            text-shadow:
+                0 0 10px rgba(255, 213, 120, 0.5),
+                0 3px 12px rgba(0, 0, 0, 0.5);
+            word-break: break-word;
+        }
+        #spellingStatus {
+            margin-top: 12px;
+            font: 700 30px/1.2 "Segoe UI", sans-serif;
+            color: #dce7ff;
+        }
+        #spellingSpelledOut {
+            margin-top: 8px;
+            font: 700 26px/1.2 "Consolas", "Courier New", monospace;
+            color: #b3ffc9;
+            letter-spacing: 0.08em;
+            word-break: break-word;
+        }
+        @media (max-width: 900px) {
+            #spellingCard {
+                width: min(94vw, 980px);
+                top: 18px;
+                padding: 14px 16px;
+            }
+            #spellingLabel {
+                font-size: 16px;
+                margin-bottom: 8px;
+            }
+            #spellingWord {
+                font-size: 38px;
+            }
+            #spellingStatus {
+                font-size: 22px;
+            }
+            #spellingSpelledOut {
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="caption"></div>
+    <div id="spellingCard">
+        <div id="spellingLabel">Spelling Bee Punishment</div>
+        <div id="spellingWord"></div>
+        <div id="spellingStatus"></div>
+        <div id="spellingSpelledOut"></div>
+    </div>
+    <script>
+        const caption = document.getElementById('caption');
+        const spellingCard = document.getElementById('spellingCard');
+        const spellingWord = document.getElementById('spellingWord');
+        const spellingStatus = document.getElementById('spellingStatus');
+        const spellingSpelledOut = document.getElementById('spellingSpelledOut');
+        const seenTokens = new Set();
+        const expectedSessionId = '{AUDIO_BRIDGE_SESSION_ID}';
+        const pageLoadMs = Date.now();
+        const ttsQueue = [];
+        let ttsActive = false;
+        let captionClearTimer = null;
+        let currentLayoutToken = '';
+        let spellingHideTimer = null;
+
+        function getDefaultLayout() {
+            return {
+                tts: {
+                    anchor: 'bottom',
+                    offset_x: 0,
+                    offset_y: 64,
+                    max_width_percent: 95,
+                    box_width_px: 1280,
+                    box_height_px: 720,
+                    edge_padding_px: 48,
+                    font_size: 44,
+                    line_height: 1.28,
+                    padding_x: 24,
+                    padding_y: 18,
+                    border_radius: 18,
+                    bg_opacity: 0.72,
+                    speaker_color: '#9146FF'
+                }
+            };
+        }
+
+        let layoutSettings = getDefaultLayout();
+
+        function sleep(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        function buildAudioUrl(relativeFile, token) {
+            const sanitized = String(relativeFile || '').replace(/^\/+/, '');
+            const encodedFile = sanitized.split('/').map((part) => encodeURIComponent(part)).join('/');
+            return '/' + encodedFile + '?v=' + encodeURIComponent(token || Date.now());
+        }
+
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+
+        function showCaption(event) {
+            const speaker = event.speaker || '';
+            const messageText = event.text || event.caption || '';
+
+            if (!event.caption && !speaker && !messageText) {
+                return;
+            }
+
+            if (captionClearTimer) {
+                clearTimeout(captionClearTimer);
+                captionClearTimer = null;
+            }
+
+            caption.innerHTML = speaker
+                ? `<span id="speakerLine">${escapeHtml(speaker)}</span><span id="messageLine">${escapeHtml(messageText)}</span>`
+                : `<span id="messageLine">${escapeHtml(messageText)}</span>`;
+            caption.classList.add('visible');
+            applyLayoutSettings();
+        }
+
+        function applyLayoutSettings() {
+            const t = (layoutSettings && layoutSettings.tts) ? layoutSettings.tts : getDefaultLayout().tts;
+            const anchor = t.anchor || 'bottom';
+            const maxWidthPercent = clamp(Number(t.max_width_percent ?? 95), 30, 100);
+            const boxWidth = Math.max(Number(t.box_width_px ?? 1280), 320);
+            const boxHeight = Math.max(Number(t.box_height_px ?? 720), 120);
+            const edgePadding = Math.max(Number(t.edge_padding_px ?? 48), 0);
+            const rawOffsetX = Number.isFinite(Number(t.offset_x)) ? Number(t.offset_x) : 0;
+            const rawOffsetY = Number.isFinite(Number(t.offset_y)) ? Number(t.offset_y) : 64;
+            const usableWidth = Math.max(window.innerWidth - (edgePadding * 2), 120);
+            const usableHeight = Math.max(window.innerHeight - (edgePadding * 2), 120);
+            const widthByPercent = usableWidth * (maxWidthPercent / 100);
+            const effectiveWidth = clamp(Math.min(boxWidth, widthByPercent), 120, usableWidth);
+            const effectiveHeight = clamp(boxHeight, 120, usableHeight);
+            const safeHalfRange = Math.max((usableWidth - effectiveWidth) / 2, 0);
+            const safeOffsetX = clamp(rawOffsetX, -safeHalfRange, safeHalfRange);
+
+            caption.style.position = 'absolute';
+            caption.style.maxWidth = `${effectiveWidth}px`;
+            caption.style.width = `${effectiveWidth}px`;
+            caption.style.maxHeight = `${effectiveHeight}px`;
+            caption.style.overflowWrap = 'anywhere';
+            caption.style.wordBreak = 'normal';
+            caption.style.padding = `${t.padding_y ?? 18}px ${t.padding_x ?? 24}px`;
+            caption.style.borderRadius = `${t.border_radius ?? 18}px`;
+            caption.style.fontSize = `${t.font_size ?? 44}px`;
+            caption.style.lineHeight = `${t.line_height ?? 1.28}`;
+            caption.style.background = `rgba(0, 0, 0, ${t.bg_opacity ?? 0.72})`;
+
+            const speakerLine = document.getElementById('speakerLine');
+            if (speakerLine) {
+                speakerLine.style.color = t.speaker_color || '#9146FF';
+                speakerLine.style.textAlign = 'center';
+            }
+
+            caption.style.left = `calc(50% + ${safeOffsetX}px)`;
+            caption.style.top = '';
+            caption.style.bottom = '';
+            caption.style.transform = '';
+
+            if (anchor === 'top') {
+                const safeTop = clamp(rawOffsetY, edgePadding, Math.max(window.innerHeight - effectiveHeight - edgePadding, edgePadding));
+                caption.style.top = `${safeTop}px`;
+                caption.style.transform = 'translateX(-50%)';
+                return;
+            }
+
+            if (anchor === 'center') {
+                const safeCenterRange = Math.max((usableHeight - effectiveHeight) / 2, 0);
+                const safeCenterY = clamp(rawOffsetY, -safeCenterRange, safeCenterRange);
+                caption.style.top = `calc(50% + ${safeCenterY}px)`;
+                caption.style.transform = 'translate(-50%, -50%)';
+                return;
+            }
+
+            const safeBottom = clamp(rawOffsetY, edgePadding, Math.max(window.innerHeight - effectiveHeight - edgePadding, edgePadding));
+            caption.style.bottom = `${safeBottom}px`;
+            caption.style.transform = 'translateX(-50%)';
+        }
+
+        async function pollLayoutSettings() {
+            try {
+                const response = await fetch('/api/layout?ts=' + Date.now(), { cache: 'no-store' });
+                if (!response.ok) {
+                    return;
+                }
+
+                const rawText = await response.text();
+                const layoutToken = `${rawText.length}:${rawText.slice(0, 120)}`;
+                if (layoutToken === currentLayoutToken) {
+                    return;
+                }
+
+                currentLayoutToken = layoutToken;
+                const parsed = JSON.parse(rawText);
+                if (parsed && typeof parsed === 'object') {
+                    layoutSettings = parsed;
+                    applyLayoutSettings();
+                }
+            } catch (error) {
+                // Ignore layout polling errors and keep current settings.
+            }
+        }
+
+        function hideCaption(delayMs = 260) {
+            caption.classList.remove('visible');
+            if (captionClearTimer) {
+                clearTimeout(captionClearTimer);
+            }
+            captionClearTimer = setTimeout(() => {
+                if (!caption.classList.contains('visible')) {
+                    caption.innerHTML = '';
+                }
+            }, delayMs);
+        }
+
+        function showSpellingCard(event) {
+            if (!event) {
+                return;
+            }
+
+            if (spellingHideTimer) {
+                clearTimeout(spellingHideTimer);
+                spellingHideTimer = null;
+            }
+
+            const displayWord = event.reveal_word === false
+                ? '???'
+                : String(event.word || '').trim();
+
+            spellingWord.textContent = displayWord || '...';
+            spellingStatus.textContent = String(event.status || '').trim();
+            spellingSpelledOut.textContent = String(event.spelled_out || '').trim();
+            spellingCard.classList.add('visible');
+
+            if (String(event.state || '').toLowerCase() === 'done') {
+                spellingHideTimer = setTimeout(() => {
+                    spellingCard.classList.remove('visible');
+                    spellingHideTimer = null;
+                }, 9000);
+            }
+        }
+
+        async function playTtsQueue() {
+            if (ttsActive) {
+                return;
+            }
+
+            ttsActive = true;
+            while (ttsQueue.length > 0) {
+                const event = ttsQueue.shift();
+                if (!event || !event.file) {
+                    continue;
+                }
+
+                showCaption(event);
+
+                const audio = new Audio(buildAudioUrl(event.file, event.token));
+                audio.volume = typeof event.volume === 'number' ? event.volume : 1.0;
+
+                await new Promise((resolve) => {
+                    let finished = false;
+                    const finish = () => {
+                        if (finished) {
+                            return;
+                        }
+                        finished = true;
+                        resolve();
+                    };
+
+                    audio.onended = finish;
+                    audio.onerror = finish;
+                    audio.onabort = finish;
+                    audio.play().catch(finish);
+                });
+
+                hideCaption();
+                await sleep(5000);
+            }
+
+            ttsActive = false;
+        }
+
+        function playSfx(event) {
+            if (!event || !event.file) {
+                return;
+            }
+
+            const audio = new Audio(buildAudioUrl(event.file, event.token));
+            audio.volume = typeof event.volume === 'number' ? event.volume : 1.0;
+            audio.play().catch(() => {
+                // Keep polling if browser autoplay policy rejects this instance.
+            });
+        }
+
+        function handleEvent(event) {
+            if (!event || !event.token) {
+                return;
+            }
+
+            const createdAt = Number(event.created_at || 0);
+
+            if (event.session_id) {
+                if (event.session_id !== expectedSessionId) {
+                    return;
+                }
+            } else {
+                // Legacy events without session IDs should only pass if they were created right now.
+                if (!createdAt || createdAt < (pageLoadMs - 2000)) {
+                    return;
+                }
+            }
+
+            if (event.kind === 'caption' && !event.file) {
+                showCaption(event);
+                return;
+            }
+
+            if (event.kind === 'spelling') {
+                showSpellingCard(event);
+                return;
+            }
+
+            if (!event.file) {
+                return;
+            }
+
+            if ((event.mode || 'sfx') === 'tts') {
+                ttsQueue.push(event);
+                playTtsQueue();
+                return;
+            }
+
+            playSfx(event);
+        }
+
+        async function pollAudioState() {
+            try {
+                const response = await fetch('/bridge/tts_audio_state.json?ts=' + Date.now(), { cache: 'no-store' });
+                if (!response.ok) return;
+
+                const state = await response.json();
+                const events = Array.isArray(state.events) ? state.events : [];
+
+                for (const event of events) {
+                    if (!event || !event.token || seenTokens.has(event.token)) {
+                        continue;
+                    }
+                    seenTokens.add(event.token);
+                    handleEvent(event);
+                }
+
+                if (seenTokens.size > 5000) {
+                    seenTokens.clear();
+                }
+            } catch (error) {
+                // Swallow polling errors while the bot is idle.
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        setInterval(pollAudioState, 150);
+        setInterval(pollLayoutSettings, 1000);
+        applyLayoutSettings();
+        pollLayoutSettings();
+        pollAudioState();
+    </script>
+</body>
+</html>

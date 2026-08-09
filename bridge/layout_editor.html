@@ -1,0 +1,330 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>OBS Overlay Layout Editor</title>
+    <style>
+        :root {
+            --bg: #10131a;
+            --panel: #1a1f2b;
+            --line: #2b3345;
+            --text: #f2f5ff;
+            --muted: #a7b2cc;
+            --accent: #4cd2ff;
+        }
+        body {
+            margin: 0;
+            font: 15px/1.4 Segoe UI, sans-serif;
+            color: var(--text);
+            background: radial-gradient(circle at 20% 10%, #202944, var(--bg));
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            min-height: 100vh;
+        }
+        .panel {
+            background: rgba(15, 18, 25, 0.92);
+            border-right: 1px solid var(--line);
+            padding: 18px;
+            overflow: auto;
+        }
+        .preview-wrap {
+            display: grid;
+            place-items: center;
+            padding: 22px;
+        }
+        .preview {
+            width: min(96vw, 1280px);
+            aspect-ratio: 16 / 9;
+            background:
+                linear-gradient(0deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+                #0f131d;
+            background-size: 40px 40px;
+            border: 1px solid #2e3850;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        .caption {
+            position: absolute;
+            left: 50%;
+            bottom: 64px;
+            transform: translateX(-50%);
+            width: 70%;
+            max-width: 95%;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.72);
+            border-radius: 18px;
+            padding: 18px 24px;
+            cursor: grab;
+            user-select: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            text-shadow: -2px -2px 0 #000, 2px 2px 0 #000, 0 4px 10px rgba(0,0,0,.8);
+        }
+        .caption:active { cursor: grabbing; }
+        .speaker { color: #9146FF; font-weight: 900; display: block; margin-bottom: 6px; }
+        h1 { font-size: 18px; margin: 0 0 12px 0; }
+        h2 { font-size: 14px; margin: 16px 0 8px 0; color: var(--muted); }
+        label { display: block; margin: 10px 0 4px 0; color: var(--muted); }
+        input, select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #36445f;
+            background: #131a27;
+            color: var(--text);
+        }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .actions { display: flex; gap: 8px; margin-top: 16px; }
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: #02131a;
+            background: var(--accent);
+            font-weight: 700;
+            cursor: pointer;
+        }
+        button.secondary { background: #9eb0d5; }
+        .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <aside class="panel">
+        <h1>Overlay Layout Editor</h1>
+        <div class="hint">Drag caption in preview to set offsets. Click Save to apply to TTS browser source.</div>
+
+        <h2>Caption Layout</h2>
+        <label for="anchor">Anchor</label>
+        <select id="anchor">
+            <option value="bottom">Bottom</option>
+            <option value="center">Center</option>
+            <option value="top">Top</option>
+        </select>
+
+        <div class="row">
+            <div>
+                <label for="offsetX">Offset X (px)</label>
+                <input id="offsetX" type="number" />
+            </div>
+            <div>
+                <label for="offsetY">Offset Y (px)</label>
+                <input id="offsetY" type="number" />
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <label for="fontSize">Font Size</label>
+                <input id="fontSize" type="number" min="16" max="120" />
+            </div>
+            <div>
+                <label for="maxWidth">Max Width %</label>
+                <input id="maxWidth" type="number" min="30" max="100" />
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <label for="boxWidth">Box Width (px)</label>
+                <input id="boxWidth" type="number" min="320" max="3840" />
+            </div>
+            <div>
+                <label for="boxHeight">Box Height (px)</label>
+                <input id="boxHeight" type="number" min="120" max="2160" />
+            </div>
+        </div>
+
+        <label for="edgePadding">Edge Padding (px)</label>
+        <input id="edgePadding" type="number" min="0" max="400" />
+
+        <div class="row">
+            <div>
+                <label for="padY">Padding Y</label>
+                <input id="padY" type="number" min="0" max="80" />
+            </div>
+            <div>
+                <label for="padX">Padding X</label>
+                <input id="padX" type="number" min="0" max="120" />
+            </div>
+        </div>
+
+        <label for="radius">Border Radius</label>
+        <input id="radius" type="number" min="0" max="80" />
+
+        <label for="opacity">Background Opacity (0-1)</label>
+        <input id="opacity" type="number" min="0" max="1" step="0.01" />
+
+        <label for="speakerColor">Speaker Color (hex)</label>
+        <input id="speakerColor" type="text" />
+
+        <div class="actions">
+            <button id="save">Save Layout</button>
+            <button id="reset" class="secondary">Reload</button>
+        </div>
+        <div id="status" class="hint"></div>
+    </aside>
+
+    <main class="preview-wrap">
+        <div class="preview" id="preview">
+            <div class="caption" id="caption">
+                <span class="speaker" id="speaker">viewer123</span>
+                This is a caption preview for TTS browser source placement.
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const preview = document.getElementById('preview');
+        const caption = document.getElementById('caption');
+        const status = document.getElementById('status');
+        const ids = ['anchor', 'offsetX', 'offsetY', 'fontSize', 'maxWidth', 'boxWidth', 'boxHeight', 'edgePadding', 'padY', 'padX', 'radius', 'opacity', 'speakerColor'];
+        const fields = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
+
+        let layout = null;
+
+        function toNumber(value, fallback = 0) {
+            const num = Number(value);
+            return Number.isFinite(num) ? num : fallback;
+        }
+
+        function applyLayoutToPreview() {
+            if (!layout) return;
+            const t = layout.tts;
+            const boxWidth = Math.max(toNumber(t.box_width_px, 1280), 320);
+            const boxHeight = Math.max(toNumber(t.box_height_px, 720), 120);
+            const edgePadding = Math.max(toNumber(t.edge_padding_px, 48), 0);
+            const previewWidth = Math.max(preview.clientWidth - (edgePadding * 2), 120);
+            const previewHeight = Math.max(preview.clientHeight - (edgePadding * 2), 120);
+            const widthByPercent = previewWidth * ((t.max_width_percent ?? 95) / 100);
+            const effectiveWidth = Math.min(Math.max(Math.min(boxWidth, widthByPercent), 120), previewWidth);
+            const effectiveHeight = Math.min(Math.max(boxHeight, 120), previewHeight);
+
+            caption.style.fontSize = `${t.font_size}px`;
+            caption.style.lineHeight = String(t.line_height || 1.28);
+            caption.style.maxWidth = `${effectiveWidth}px`;
+            caption.style.width = `${effectiveWidth}px`;
+            caption.style.maxHeight = `${effectiveHeight}px`;
+            caption.style.padding = `${t.padding_y}px ${t.padding_x}px`;
+            caption.style.borderRadius = `${t.border_radius}px`;
+            caption.style.background = `rgba(0,0,0,${t.bg_opacity})`;
+            document.getElementById('speaker').style.color = t.speaker_color;
+            document.getElementById('speaker').style.textAlign = 'center';
+
+            caption.style.left = '50%';
+            caption.style.top = 'auto';
+            caption.style.bottom = 'auto';
+
+            if (t.anchor === 'top') {
+                caption.style.top = `${t.offset_y}px`;
+                caption.style.transform = `translate(calc(-50% + ${t.offset_x}px), 0)`;
+            } else if (t.anchor === 'center') {
+                caption.style.top = '50%';
+                caption.style.transform = `translate(calc(-50% + ${t.offset_x}px), calc(-50% + ${t.offset_y}px))`;
+            } else {
+                caption.style.bottom = `${t.offset_y}px`;
+                caption.style.transform = `translate(calc(-50% + ${t.offset_x}px), 0)`;
+            }
+
+            fields.anchor.value = t.anchor;
+            fields.offsetX.value = t.offset_x;
+            fields.offsetY.value = t.offset_y;
+            fields.fontSize.value = t.font_size;
+            fields.maxWidth.value = t.max_width_percent;
+            fields.boxWidth.value = boxWidth;
+            fields.boxHeight.value = boxHeight;
+            fields.edgePadding.value = edgePadding;
+            fields.padY.value = t.padding_y;
+            fields.padX.value = t.padding_x;
+            fields.radius.value = t.border_radius;
+            fields.opacity.value = t.bg_opacity;
+            fields.speakerColor.value = t.speaker_color;
+        }
+
+        function readLayoutFromInputs() {
+            layout.tts.anchor = fields.anchor.value;
+            layout.tts.offset_x = toNumber(fields.offsetX.value, 0);
+            layout.tts.offset_y = toNumber(fields.offsetY.value, 64);
+            layout.tts.font_size = toNumber(fields.fontSize.value, 44);
+            layout.tts.max_width_percent = toNumber(fields.maxWidth.value, 95);
+            layout.tts.box_width_px = Math.max(toNumber(fields.boxWidth.value, 1280), 320);
+            layout.tts.box_height_px = Math.max(toNumber(fields.boxHeight.value, 720), 120);
+            layout.tts.edge_padding_px = Math.max(toNumber(fields.edgePadding.value, 48), 0);
+            layout.tts.padding_y = toNumber(fields.padY.value, 18);
+            layout.tts.padding_x = toNumber(fields.padX.value, 24);
+            layout.tts.border_radius = toNumber(fields.radius.value, 18);
+            layout.tts.bg_opacity = toNumber(fields.opacity.value, 0.72);
+            layout.tts.speaker_color = fields.speakerColor.value || '#9146FF';
+        }
+
+        async function loadLayout() {
+            const response = await fetch('/api/layout', { cache: 'no-store' });
+            layout = await response.json();
+            applyLayoutToPreview();
+        }
+
+        async function saveLayout() {
+            readLayoutFromInputs();
+            const response = await fetch('/api/layout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(layout),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+                status.textContent = `Save failed: ${result.error || response.statusText}`;
+                return;
+            }
+            layout = result.layout;
+            applyLayoutToPreview();
+            status.textContent = 'Saved. TTS browser source updates on next poll.';
+        }
+
+        ids.forEach((id) => {
+            fields[id].addEventListener('input', () => {
+                if (!layout) return;
+                readLayoutFromInputs();
+                applyLayoutToPreview();
+            });
+        });
+
+        document.getElementById('save').addEventListener('click', saveLayout);
+        document.getElementById('reset').addEventListener('click', loadLayout);
+
+        let drag = null;
+        caption.addEventListener('mousedown', (event) => {
+            if (!layout) return;
+            drag = {
+                startX: event.clientX,
+                startY: event.clientY,
+                startOffsetX: layout.tts.offset_x,
+                startOffsetY: layout.tts.offset_y,
+            };
+            event.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (event) => {
+            if (!drag || !layout) return;
+            const rect = preview.getBoundingClientRect();
+            const dx = event.clientX - drag.startX;
+            const dy = event.clientY - drag.startY;
+
+            const scaleX = 1920 / rect.width;
+            const scaleY = 1080 / rect.height;
+
+            layout.tts.offset_x = Math.round(drag.startOffsetX + dx * scaleX);
+            layout.tts.offset_y = Math.round(drag.startOffsetY + dy * scaleY);
+            applyLayoutToPreview();
+        });
+
+        window.addEventListener('mouseup', () => {
+            drag = null;
+        });
+
+        loadLayout().catch((error) => {
+            status.textContent = `Failed to load layout: ${error}`;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "tts": {
+    "anchor": "bottom",
+    "offset_x": 0,
+    "offset_y": 64,
+    "max_width_percent": 95,
+    "box_width_px": 1280,
+    "box_height_px": 720,
+    "edge_padding_px": 48,
+    "font_size": 44,
+    "line_height": 1.28,
+    "padding_x": 24,
+    "padding_y": 18,
+    "border_radius": 18,
+    "bg_opacity": 0.72,
+    "speaker_color": "#9146FF"
+  }
+}

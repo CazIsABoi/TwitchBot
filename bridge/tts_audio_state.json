@@ -1,0 +1,16 @@
+{
+  "events": [
+    {
+      "kind": "audio",
+      "mode": "sfx",
+      "session_id": "64f1bf31fa0c4865808aa99dde7c57af",
+      "created_at": 1785711416986,
+      "token": "9cf5e22f56934e869b1c497357b4015c",
+      "volume": 1.0,
+      "caption": "",
+      "speaker": "",
+      "text": "",
+      "file": "sounds/flashbang.mp3"
+    }
+  ]
+}

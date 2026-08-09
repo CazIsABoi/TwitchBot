@@ -1,0 +1,80 @@
+{
+  "_comment": "Map each Twitch channel-point reward TITLE (exact, case-insensitive) to an action. Edit titles here when you rename rewards in Twitch Creator Dashboard — no Python changes needed.",
+  "rewards": [
+    {
+      "titles": ["End the Stream"],
+      "action": "stream_ender"
+    },
+    {
+      "titles": ["Flashbang"],
+      "action": "flashbang"
+    },
+    {
+      "titles": ["Fart Sound Effect"],
+      "action": "play_sound",
+      "params": {
+        "file": "sounds/fart.mp3"
+      }
+    },
+    {
+      "titles": ["Vine Boom Sound Effect"],
+      "action": "play_sound",
+      "params": {
+        "file": "sounds/vine-boom.mp3"
+      }
+    },
+    {
+      "titles": ["Fahh Sound Effect"],
+      "action": "play_sound",
+      "params": {
+        "file": "sounds/fah.mp3"
+      }
+    },
+    {
+      "titles": ["Dodgeball Sound Effect"],
+      "action": "play_sound",
+      "params": {
+        "files": ["sounds/dodgeball.mp3", "sounds/dodgeball2.mp3"]
+      }
+    },
+    {
+      "titles": ["Pipe Sound Effect"],
+      "action": "play_sound",
+      "params": {
+        "file": "sounds/pipe.mp3"
+      }
+    },
+    {
+      "titles": ["Discord join call Sound"],
+      "action": "play_sound",
+      "params": {
+        "file": "sounds/discordjoincall.mp3"
+      }
+    },
+    {
+      "titles": ["LETS GO!"],
+      "action": "play_sound",
+      "params": {
+        "file": "sounds/letsgo.mp3"
+      }
+    },
+    {
+      "titles": ["Hide Cam"],
+      "action": "hide_cam",
+      "params": {
+        "seconds": 30
+      }
+    },
+    {
+      "titles": ["TTS"],
+      "action": "tts",
+      "params": {
+        "voice": "male"
+      }
+    },
+    {
+      "titles": ["Spelling Bee"],
+      "action": "spelling_bee"
+    }
+  ]
+}

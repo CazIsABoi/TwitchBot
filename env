@@ -1,0 +1,16 @@
+# Local secrets — gitignored. Rotate APP_SECRET and OBS_PASSWORD after setup.
+
+# Twitch application credentials (https://dev.twitch.tv/console)
+APP_ID=bj72euwevfc2bholblr29db6udgg4y
+APP_SECRET=y44us6cst0alv1nvathfx9wybj9mis
+
+# Channel login name (lowercase, no #)
+TARGET_CHANNEL=cazisaboi
+
+# OBS WebSocket (OBS -> Tools -> WebSocket Server Settings)
+OBS_HOST=127.0.0.1
+OBS_PORT=4455
+OBS_PASSWORD=PsQq84sH4JXWGZHj
+
+# Optional hosted audio bridge secrets
+HOSTED_AUDIO_API_KEY=
