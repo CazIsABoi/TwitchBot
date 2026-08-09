@@ -35,7 +35,9 @@ from config import (
     SPELLING_REWARD_WORD_MIN_LENGTH,
     SPELLING_REWARD_WORD_MAX_LENGTH,
     REWARDS_CONFIG_FILE,
+    QUEUED_REWARD_ACTIONS,
 )
+from reward_queue import reward_queue
 
 try:
     from tts_handler import parse_and_speak
@@ -94,7 +96,12 @@ def load_rewards_config(path: Path = REWARDS_CONFIG_FILE):
             key = str(title).strip().lower()
             if not key:
                 continue
-            routes[key] = {"action": action, "params": params}
+            # Optional per-reward override: "queue": true/false in rewards_config.json
+            if "queue" in entry:
+                queue_flag = bool(entry.get("queue"))
+            else:
+                queue_flag = None
+            routes[key] = {"action": action, "params": params, "queue": queue_flag}
 
     TITLE_ROUTES = routes
     print(f"✅ Loaded {len(TITLE_ROUTES)} reward title route(s) from {path.name}")
@@ -446,8 +453,21 @@ async def spelling_bee(redemption, params):
 # Main entry
 # ---------------------------------------------------------------------------
 
+def _should_queue_action(action_id: str, route: dict) -> bool:
+    """Decide if this redemption goes through the serial queue."""
+    override = route.get("queue")
+    if override is not None:
+        return bool(override)
+    queued_actions = {str(a).strip().lower() for a in (QUEUED_REWARD_ACTIONS or set())}
+    return action_id.strip().lower() in queued_actions
+
+
 async def handle_reward(redemption):
-    """Route a channel-point redemption using rewards_config.json titles."""
+    """Route a channel-point redemption using rewards_config.json titles.
+
+    Heavy actions (TTS / Flashbang / Spelling Bee / ...) are serialized via
+    reward_queue. Short SFX (play_sound) run immediately and may overlap.
+    """
     reward_title = (redemption.event.reward.title or "").strip()
     route = TITLE_ROUTES.get(reward_title.lower())
 
@@ -466,6 +486,21 @@ async def handle_reward(redemption):
         print(f"❌ No Python handler registered for action '{action_id}' (title='{reward_title}')")
         return
 
+    user_name = redemption.event.user_name or "unknown"
+
+    if _should_queue_action(action_id, route):
+        async def _run():
+            await handler(redemption, params)
+
+        await reward_queue.enqueue(
+            action_id=action_id,
+            title=reward_title,
+            user_name=user_name,
+            factory=_run,
+        )
+        return
+
+    # Stackable path (SFX etc.) — fire and forget so overlaps are allowed.
     try:
         await handler(redemption, params)
     except Exception as error:

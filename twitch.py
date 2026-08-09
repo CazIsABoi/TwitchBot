@@ -12,8 +12,9 @@ from twitchAPI.object.eventsub import (
     StreamOnlineEvent,
 )
 from twitchAPI.helper import first
-from config import APP_ID, APP_SECRET, TARGET_CHANNEL, IGNORED_CHATTERS_FILE
+from config import APP_ID, APP_SECRET, TARGET_CHANNEL, IGNORED_CHATTERS_FILE, SKIP_REWARD_HOTKEY
 from rewards import handle_reward, load_rewards_config
+from reward_queue import reward_queue
 from audio_handler import play_sound
 from image_handler import show_fireworks_announcement
 from obs_handler import (
@@ -204,6 +205,103 @@ async def test_command(cmd: ChatCommand):
         await cmd.reply(f"{cmd.user.name}: {cmd.parameter}")
 
 
+
+def _is_broadcaster_or_mod(cmd: ChatCommand) -> bool:
+    """Allow skip/status commands for broadcaster and mods."""
+    try:
+        if getattr(cmd.user, 'mod', False):
+            return True
+        # Broadcaster badge / name match
+        name = (cmd.user.name or '').strip().lower()
+        if name and name == str(TARGET_CHANNEL).strip().lower():
+            return True
+        badges = getattr(cmd.user, 'badges', None) or {}
+        if isinstance(badges, dict) and ('broadcaster' in badges or 'moderator' in badges):
+            return True
+        # twitchAPI sometimes exposes badge string
+        if isinstance(badges, str) and ('broadcaster' in badges or 'moderator' in badges):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+async def skip_command(cmd: ChatCommand):
+    """!skip — cancel the currently running queued reward (mod/broadcaster)."""
+    if not _is_broadcaster_or_mod(cmd):
+        await cmd.reply('Only the broadcaster or mods can skip rewards.')
+        return
+    ok = reward_queue.skip_current(reason=f'chat !skip by {cmd.user.name}')
+    if ok:
+        await cmd.reply(f'Skipped. {reward_queue.status_text()}')
+    else:
+        await cmd.reply(f'Nothing to skip. {reward_queue.status_text()}')
+
+
+async def queue_status_command(cmd: ChatCommand):
+    """!queue — show current/pending queued rewards."""
+    await cmd.reply(reward_queue.status_text())
+
+
+def start_skip_hotkey_listener(loop: asyncio.AbstractEventLoop):
+    """Background thread: global keyboard shortcut to skip current queued reward."""
+    hotkey = str(SKIP_REWARD_HOTKEY or '').strip()
+    if not hotkey:
+        print('⌨️ Skip hotkey disabled (SKIP_REWARD_HOTKEY is empty)')
+        return None
+
+    try:
+        from pynput import keyboard
+    except ImportError:
+        print('⚠️ pynput not installed — skip hotkey disabled. Run: pip install pynput')
+        return None
+
+    def on_activate():
+        print(f'⌨️ Skip hotkey pressed ({hotkey})')
+        reward_queue.skip_current(reason=f'hotkey {hotkey}')
+
+    # pynput expects tokens like <f8>, <ctrl>+<shift>+s
+    normalized = hotkey.lower().replace(' ', '')
+    if not normalized.startswith('<') and '+' not in normalized and normalized.startswith('f') and normalized[1:].isdigit():
+        normalized = f'<{normalized}>'
+    elif '+' in normalized:
+        parts = []
+        for part in normalized.split('+'):
+            part = part.strip()
+            if part.startswith('f') and part[1:].isdigit():
+                parts.append(f'<{part}>')
+            elif part in {'ctrl', 'alt', 'shift', 'cmd', 'cmd_l', 'cmd_r'}:
+                parts.append(f'<{part}>')
+            else:
+                parts.append(part)
+        normalized = '+'.join(parts)
+
+    try:
+        hotkey_obj = keyboard.HotKey(keyboard.HotKey.parse(normalized), on_activate)
+    except Exception as error:
+        print(f'⚠️ Invalid SKIP_REWARD_HOTKEY={hotkey!r} (normalized={normalized!r}): {error}')
+        print('   Examples: f8, f9, ctrl+shift+s')
+        return None
+
+    def on_press(key):
+        try:
+            hotkey_obj.press(listener.canonical(key))
+        except Exception:
+            pass
+
+    def on_release(key):
+        try:
+            hotkey_obj.release(listener.canonical(key))
+        except Exception:
+            pass
+
+    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+    listener.daemon = True
+    listener.start()
+    print(f'⌨️ Skip hotkey armed: {hotkey} (also available as chat !skip)')
+    return listener
+
+
 async def on_channel_points_redeem(data: ChannelPointsCustomRewardRedemptionAddEvent):
     await handle_reward(data)
 
@@ -245,10 +343,15 @@ async def run():
     await configure_tts_browser_source()
     await configure_tts_text_browser_source()
 
+    await reward_queue.start()
+    skip_listener = start_skip_hotkey_listener(asyncio.get_running_loop())
+
     chat.register_event(ChatEvent.READY, on_ready)
     chat.register_event(ChatEvent.MESSAGE, on_message)
     chat.register_event(ChatEvent.SUB, on_sub)
     chat.register_command("reply", test_command)
+    chat.register_command("skip", skip_command)
+    chat.register_command("queue", queue_status_command)
 
     eventsub = EventSubWebsocket(twitch)
     eventsub.start()
@@ -272,10 +375,19 @@ async def run():
     chat.start()
 
     try:
-        input("press ENTER to stop\n")
+        # Must not block the event loop — otherwise the reward queue worker never runs.
+        await asyncio.get_running_loop().run_in_executor(
+            None, input, "press ENTER to stop\n"
+        )
     finally:
         if cleanup_tts_cache is not None:
             cleanup_tts_cache()
+        await reward_queue.stop()
+        if skip_listener is not None:
+            try:
+                skip_listener.stop()
+            except Exception:
+                pass
         chat.stop()
         await eventsub.stop()
         await twitch.close()

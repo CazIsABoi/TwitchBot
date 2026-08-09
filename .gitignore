@@ -1,8 +1,12 @@
 # Twitch Bot - Don't commit sensitive files
+.env
+twitch_tokens.json
+config.local.py
 *.pyc
 __pycache__/
-.env
-env
-twitch_tokens.json
-.venv
-venv
+venv/
+.venv/
+temp_tts/
+bridge/tts_audio_state.json
+bridge/overlay_temp.html
+bridge/layout_settings.json

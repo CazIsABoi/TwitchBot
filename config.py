@@ -119,3 +119,21 @@ if not APP_ID or not APP_SECRET:
     print("⚠️ APP_ID / APP_SECRET missing. Copy env.example to .env and fill them in.")
 if not TARGET_CHANNEL:
     print("⚠️ TARGET_CHANNEL missing in .env (or env)")
+
+# ---------------------------------------------------------------------------
+# Reward queue + skip hotkey
+# ---------------------------------------------------------------------------
+# Actions that run one-at-a-time through the serial queue.
+# Everything else (especially play_sound SFX) stacks / overlaps freely.
+QUEUED_REWARD_ACTIONS = {
+    "tts",
+    "flashbang",
+    "spelling_bee",
+    "stream_ender",
+    "hide_cam",
+}
+
+# Keyboard shortcut to skip the *current* queued reward.
+# Examples: "f8", "f9", "ctrl+shift+s", "num_subtract"
+# Set to "" to disable the hotkey (chat !skip still works for the broadcaster).
+SKIP_REWARD_HOTKEY = "f8"

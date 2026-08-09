@@ -5,6 +5,7 @@ Requires: pip install just_playback
 from just_playback import Playback
 import asyncio
 from pathlib import Path
+import threading
 
 from obs_handler import queue_audio_for_browser_source
 
@@ -13,12 +14,40 @@ try:
 except Exception:
     AUDIO_ROUTING_MODE = "browser"
 
+# Track active local playback objects so skip can cut them short.
+_active_local_lock = threading.Lock()
+_active_local_playbacks = set()
+
 
 def _get_audio_routing_mode():
     mode = str(AUDIO_ROUTING_MODE).strip().lower()
     if mode not in {"browser", "local", "both"}:
         return "browser"
     return mode
+
+
+def _register_local_playback(playback):
+    with _active_local_lock:
+        _active_local_playbacks.add(playback)
+
+
+def _unregister_local_playback(playback):
+    with _active_local_lock:
+        _active_local_playbacks.discard(playback)
+
+
+def stop_current_local_playback():
+    """Stop every tracked local Playback instance (used by reward skip)."""
+    with _active_local_lock:
+        active = list(_active_local_playbacks)
+        _active_local_playbacks.clear()
+    for playback in active:
+        try:
+            playback.stop()
+        except Exception:
+            pass
+    if active:
+        print(f"🔇 Stopped {len(active)} local playback(s)")
 
 
 async def _play_sound_local(file_path, volume=1.0, wait_until_complete=True):
@@ -32,24 +61,35 @@ async def _play_sound_local(file_path, volume=1.0, wait_until_complete=True):
     playback.load_file(str(sound_path))
     playback.set_volume(volume)
     playback.play()
+    _register_local_playback(playback)
 
-    if wait_until_complete:
-        while playback.active:
-            await asyncio.sleep(0.1)
+    try:
+        if wait_until_complete:
+            while playback.active:
+                await asyncio.sleep(0.1)
+    except asyncio.CancelledError:
+        try:
+            playback.stop()
+        except Exception:
+            pass
+        raise
+    finally:
+        _unregister_local_playback(playback)
 
     return playback
+
 
 async def play_sound(file_path, volume=1.0):
     """
     Play an audio file
-    
+
     Args:
         file_path: Path to audio file (mp3, wav, ogg, flac)
         volume: Volume level 0.0 to 1.0
     """
     try:
         sound_path = Path(file_path)
-        
+
         if not sound_path.exists():
             print(f"❌ Audio file not found: {file_path}")
             return
@@ -71,7 +111,9 @@ async def play_sound(file_path, volume=1.0):
 
         # Local playback path (always for local/both, and as browser fallback).
         await _play_sound_local(sound_path, volume=volume, wait_until_complete=True)
-        
+
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         print(f"❌ Error playing sound {file_path}: {e}")
 
@@ -83,7 +125,7 @@ async def play_sound_non_blocking(file_path, volume=1.0):
     """
     try:
         sound_path = Path(file_path)
-        
+
         if not sound_path.exists():
             print(f"❌ Audio file not found: {file_path}")
             return
@@ -108,22 +150,23 @@ async def play_sound_non_blocking(file_path, volume=1.0):
         if routing_mode == "both" and browser_result is not None:
             return {"routed": "both", "browser": browser_result, "local": bool(local_result)}
         return local_result
-        
+
     except Exception as e:
         print(f"❌ Error playing sound {file_path}: {e}")
         return None
 
 
 def stop_all_sounds():
-    """Note: just_playback doesn't have a global stop, so this is limited"""
-    print("⚠️ Individual playback objects must be stopped manually")
-    # To stop a specific sound, call playback.stop() on the returned object
+    """Stop tracked local playbacks."""
+    stop_current_local_playback()
 
 
 async def play_sound_local(file_path, volume=1.0, wait_until_complete=True):
     """Play sound directly on the local machine without browser routing."""
     try:
         return await _play_sound_local(file_path, volume=volume, wait_until_complete=wait_until_complete)
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
         print(f"❌ Error with local playback {file_path}: {e}")
         return None
@@ -155,4 +198,10 @@ async def play_sound_local_and_browser(
     """Play sound immediately locally and also queue it for browser-source output."""
     browser_task = asyncio.create_task(play_sound_browser(file_path, volume=browser_volume, mode=browser_mode))
     local_task = asyncio.create_task(play_sound_local(file_path, volume=local_volume, wait_until_complete=wait_for_local))
-    await asyncio.gather(browser_task, local_task)
+    try:
+        await asyncio.gather(browser_task, local_task)
+    except asyncio.CancelledError:
+        local_task.cancel()
+        browser_task.cancel()
+        stop_current_local_playback()
+        raise

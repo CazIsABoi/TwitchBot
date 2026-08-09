@@ -1,80 +1,119 @@
 {
-  "_comment": "Map each Twitch channel-point reward TITLE (exact, case-insensitive) to an action. Edit titles here when you rename rewards in Twitch Creator Dashboard — no Python changes needed.",
+  "_comment": "Map each Twitch channel-point reward TITLE (exact, case-insensitive) to an action. Optional 'queue': true forces serial queue; false allows stacking. Default queue actions (if omitted): tts, flashbang, spelling_bee, stream_ender, hide_cam. play_sound stacks by default.",
   "rewards": [
     {
-      "titles": ["End the Stream"],
-      "action": "stream_ender"
+      "titles": [
+        "End the Stream"
+      ],
+      "action": "stream_ender",
+      "queue": true
     },
     {
-      "titles": ["Flashbang"],
-      "action": "flashbang"
+      "titles": [
+        "Flashbang"
+      ],
+      "action": "flashbang",
+      "queue": true
     },
     {
-      "titles": ["Fart Sound Effect"],
+      "titles": [
+        "Fart Sound Effect"
+      ],
       "action": "play_sound",
       "params": {
         "file": "sounds/fart.mp3"
-      }
+      },
+      "queue": false
     },
     {
-      "titles": ["Vine Boom Sound Effect"],
+      "titles": [
+        "Vine Boom Sound Effect"
+      ],
       "action": "play_sound",
       "params": {
         "file": "sounds/vine-boom.mp3"
-      }
+      },
+      "queue": false
     },
     {
-      "titles": ["Fahh Sound Effect"],
+      "titles": [
+        "Fahh Sound Effect"
+      ],
       "action": "play_sound",
       "params": {
         "file": "sounds/fah.mp3"
-      }
+      },
+      "queue": false
     },
     {
-      "titles": ["Dodgeball Sound Effect"],
+      "titles": [
+        "Dodgeball Sound Effect"
+      ],
       "action": "play_sound",
       "params": {
-        "files": ["sounds/dodgeball.mp3", "sounds/dodgeball2.mp3"]
-      }
+        "files": [
+          "sounds/dodgeball.mp3",
+          "sounds/dodgeball2.mp3"
+        ]
+      },
+      "queue": false
     },
     {
-      "titles": ["Pipe Sound Effect"],
+      "titles": [
+        "Pipe Sound Effect"
+      ],
       "action": "play_sound",
       "params": {
         "file": "sounds/pipe.mp3"
-      }
+      },
+      "queue": false
     },
     {
-      "titles": ["Discord join call Sound"],
+      "titles": [
+        "Discord join call Sound"
+      ],
       "action": "play_sound",
       "params": {
         "file": "sounds/discordjoincall.mp3"
-      }
+      },
+      "queue": false
     },
     {
-      "titles": ["LETS GO!"],
+      "titles": [
+        "LETS GO!"
+      ],
       "action": "play_sound",
       "params": {
         "file": "sounds/letsgo.mp3"
-      }
+      },
+      "queue": false
     },
     {
-      "titles": ["Hide Cam"],
+      "titles": [
+        "Hide Cam"
+      ],
       "action": "hide_cam",
       "params": {
         "seconds": 30
-      }
+      },
+      "queue": true
     },
     {
-      "titles": ["TTS"],
+      "titles": [
+        "TTS"
+      ],
       "action": "tts",
       "params": {
         "voice": "male"
-      }
+      },
+      "queue": true
     },
     {
-      "titles": ["Spelling Bee"],
-      "action": "spelling_bee"
+      "titles": [
+        "Spelling Bee"
+      ],
+      "action": "spelling_bee",
+      "queue": true
     }
   ]
 }
