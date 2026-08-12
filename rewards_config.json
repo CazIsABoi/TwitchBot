@@ -114,6 +114,36 @@
       ],
       "action": "spelling_bee",
       "queue": true
+    },
+    {
+      "titles": [
+        "Applause"
+      ],
+      "action": "play_sound",
+      "params": {
+        "file": "sounds/applause.mp3"
+      },
+      "queue": false
+    },
+    {
+      "titles": [
+        "Boo"
+      ],
+      "action": "play_sound",
+      "params": {
+        "file": "sounds/boo.mp3"
+      },
+      "queue": false
+    },
+    {
+      "titles": [
+        "Laugh"
+      ],
+      "action": "play_sound",
+      "params": {
+        "file": "sounds/laugh.mp3"
+      },
+      "queue": false
     }
   ]
 }

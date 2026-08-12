@@ -1,104 +1,278 @@
-# TwitchBot (Main Bot)
+# TwitchBot — Quick Start Guide
 
-Channel points bot with OBS overlays, TTS, sound effects, and first-chatter celebrations.
+Channel points bot with OBS overlays, TTS, sound effects, spelling bee, flashbang, and first-chatter celebrations.
 
-## 1) Quick Start
+---
 
-### Prerequisites
-- Windows
-- Python 3.11+ (3.12 recommended)
-- OBS with `obs-websocket` enabled
+## 1. Prerequisites
 
-### Install
+| Requirement | Notes |
+|-------------|--------|
+| **Windows** | Primary target (tkinter dialogs, pynput hotkeys) |
+| **Python 3.11+** | 3.12 recommended |
+| **OBS Studio** | With **WebSocket** server enabled (Tools → WebSocket Server Settings) |
+| **Twitch app** | Create one at [dev.twitch.tv/console](https://dev.twitch.tv/console) |
+
+---
+
+## 2. Install
+
 ```powershell
+cd path\to\this\folder
 pip install -r requirements.txt
 ```
 
-### Configure secrets
-1. Copy the example env file:
-   ```powershell
-   copy .env.example .env
-   ```
-2. Edit `.env` and set:
-   - `APP_ID` / `APP_SECRET` from [Twitch Dev Console](https://dev.twitch.tv/console)
-   - `TARGET_CHANNEL` (your channel login, lowercase)
-   - `OBS_PASSWORD` (and host/port if needed)
+Dependencies include: `twitchAPI`, `obs-websocket-py`, `edge-tts`, `just_playback`, `python-dotenv`, `pynput`.
 
-**Security:** rotate `APP_SECRET` in the Twitch console and your OBS WebSocket password after sharing any old copies of this project. Never commit `.env` or `twitch_tokens.json`.
+---
 
-Non-secret tuning (OBS source names, flashbang timings, audio mode) still lives in `config.py`.
+## 3. Secrets (`.env`)
 
-### Configure reward titles
-Edit `rewards_config.json` to map **Twitch reward titles** to bot actions. Rename a reward in the Creator Dashboard? Update the title string in this JSON — no Python changes needed.
+1. Copy the example file:
 
-Simple sound effects only need a title + file path:
+```powershell
+copy .env.example .env
+```
+
+2. Edit `.env`:
+
+| Variable | What to put |
+|----------|-------------|
+| `APP_ID` | Client ID from Twitch Dev Console |
+| `APP_SECRET` | Client Secret from Twitch Dev Console |
+| `TARGET_CHANNEL` | Your channel login (**lowercase**) |
+| `OBS_HOST` | Usually `127.0.0.1` |
+| `OBS_PORT` | Usually `4455` |
+| `OBS_PASSWORD` | Password from OBS WebSocket settings |
+
+**Never commit `.env` or `twitch_tokens.json`.**
+
+After rotating secrets in the Twitch console or OBS, update `.env` and delete `twitch_tokens.json` so the bot re-authenticates.
+
+---
+
+## 4. Non-secret settings (`config.py`)
+
+Edit these to match your OBS scene and preferred behavior:
+
+| Setting | Purpose | Typical value |
+|---------|---------|----------------|
+| `OBS_WEBCAM_SOURCE` | Webcam source name in OBS | `Webcam` |
+| `OBS_DISPLAY_SOURCE` | Display capture name | `Display Capture` |
+| `OBS_TTS_SOURCE` | Browser source for TTS audio | `Bot` |
+| `OBS_TTS_TEXT_SOURCE` | Browser source for captions | `BotText` |
+| `OBS_OVERLAY_SOURCE` | Browser source for overlays | `RewardOverlay` |
+| `OBS_WEBCAM_COLOR_CORRECTION_FILTER` | Color filter used by flashbang | `Colour Correction` |
+| `AUDIO_ROUTING_MODE` | `local` / `browser` / `both` | `local` or `both` |
+| `FLASHBANG_*` | Hold/fade timings and volumes | see file |
+| `QUEUED_REWARD_ACTIONS` | Actions that run one-at-a-time | tts, flashbang, … |
+| `SKIP_REWARD_HOTKEY` | Keyboard skip for current queued reward | `f8` |
+
+**Source and filter names must match OBS exactly** (including spelling like `Colour` vs `Color`).
+
+---
+
+## 5. Map rewards (`rewards_config.json`)
+
+Each entry maps one or more **Twitch reward titles** (exact text, case-insensitive) to a bot action.
+
+### Built-in actions
+
+| Action | Behavior | Queued by default? |
+|--------|----------|--------------------|
+| `play_sound` | Play an MP3/WAV (stacks) | No |
+| `flashbang` | White flash + sound | Yes |
+| `tts` | Text-to-speech with tags | Yes |
+| `spelling_bee` | Word challenge + definition dialog | Yes |
+| `hide_cam` | Hide webcam for N seconds | Yes |
+| `stream_ender` | Countdown then stop stream | Yes |
+
+### Add a simple sound
+
+1. Put the file in `sounds/` (create the folder if needed).
+2. Add a block to `rewards_config.json`:
+
 ```json
 {
-  "titles": ["My New Sound"],
+  "titles": ["Applause"],
   "action": "play_sound",
-  "params": { "file": "sounds/mysound.mp3" }
+  "params": { "file": "sounds/applause.mp3" },
+  "queue": false
 }
 ```
 
-Built-in actions: `play_sound`, `flashbang`, `stream_ender`, `hide_cam`, `tts`, `spelling_bee`.
+Multiple random files:
 
-### First-chatter bots to ignore
-Edit `ignored_chatters.json` (includes `streamelements`, `nightbot`, etc.). Names are matched case-insensitively against chat logins.
-
-### Run
-```powershell
-python twitch.py
+```json
+"params": {
+  "files": ["sounds/dodgeball.mp3", "sounds/dodgeball2.mp3"]
+}
 ```
 
-First run opens Twitch auth in the browser. First-chatter resets automatically on **stream.online** (EventSub).
+3. Create a channel point reward in Twitch with the **same title**.
+4. Restart the bot (or re-run after saving JSON — restart is safest).
 
-## 2) OBS Setup (Required)
+### Force queue / stack
 
-Add 2 Browser Sources to your live scene:
+- `"queue": true` — always serialize this reward  
+- `"queue": false` — allow overlapping (good for short SFX)
 
-1. TTS/audio source
-- Name should match `OBS_TTS_SOURCE` in `config.py` (default: `Bot`)
-- URL: `http://127.0.0.1:8765/bridge/tts_audio_bridge.html`
+---
 
-2. Overlay source
-- Name should match `OBS_OVERLAY_SOURCE` in `config.py` (default: `RewardOverlay`)
-- URL: `http://127.0.0.1:8765/bridge/overlay_temp.html`
+## 6. Sound files
 
-Put `RewardOverlay` above gameplay/camera sources.
+Place audio under `sounds/`. Current config expects files such as:
 
-## 3) Layout Editor
+| Reward title | File |
+|--------------|------|
+| Fart Sound Effect | `sounds/fart.mp3` |
+| Vine Boom Sound Effect | `sounds/vine-boom.mp3` |
+| Fahh Sound Effect | `sounds/fah.mp3` |
+| Dodgeball Sound Effect | `sounds/dodgeball.mp3` / `dodgeball2.mp3` |
+| Pipe Sound Effect | `sounds/pipe.mp3` |
+| Discord join call Sound | `sounds/discordjoincall.mp3` |
+| LETS GO! | `sounds/letsgo.mp3` |
+| **Applause** | `sounds/applause.mp3` |
+| **Boo** | `sounds/boo.mp3` |
+| **Laugh** | `sounds/laugh.mp3` |
 
-```powershell
-python open_layout_editor.py
-```
+Missing files log a warning and skip playback — the bot keeps running.
 
-Or open `http://127.0.0.1:8765/bridge/layout_editor.html`
+---
 
-## 4) Common Commands
+## 7. OBS setup (required)
+
+### Enable WebSocket
+**Tools → WebSocket Server Settings** → Enable, set password, port `4455`.
+
+### Browser sources in your live scene
+
+| Source name (default) | URL |
+|-----------------------|-----|
+| `Bot` | `http://127.0.0.1:8765/bridge/tts_audio_bridge.html` |
+| `BotText` (optional captions) | same bridge / caption page as configured |
+| `RewardOverlay` | `http://127.0.0.1:8765/bridge/overlay_temp.html` |
+
+- Put **RewardOverlay** above gameplay and camera.
+- Width/height can match canvas (e.g. 1920×1080); shutdown source when not visible is optional.
+- Refresh browser source cache in OBS if audio/overlay looks stuck.
+
+### Flashbang
+Needs a **Color Correction** filter on the webcam (name must match `OBS_WEBCAM_COLOR_CORRECTION_FILTER` in `config.py`).
+
+### Check setup
 
 ```powershell
 python obs_diagnostics.py
 ```
 
-## 5) Troubleshooting
+### Layout editor (overlay positions)
 
-### No TTS/audio in OBS
-- Confirm bot is running and browser source URL is exact
-- Refresh browser source cache in OBS
-- Run `python obs_diagnostics.py`
+```powershell
+python open_layout_editor.py
+```
 
-### Overlay/flash effects missing
-- Confirm overlay URL and scene order (`RewardOverlay` on top)
+Or open `http://127.0.0.1:8765/bridge/layout_editor.html` while the bot is running.
 
-### Reward titles not triggering
-- Titles in Twitch must match an entry in `rewards_config.json` (case-insensitive)
-- Restart the bot after editing the JSON
+---
 
-### StreamElements won first chatter
-- Confirm the bot login is in `ignored_chatters.json` (default includes `streamelements`)
-- Look for log line: `⏭️ Skipping ignored chatter for first-message: streamelements`
-- First chatter now resets on each `stream.online`, not only on bot start
+## 8. Twitch Creator Dashboard checklist
 
-### Secrets / auth failures
-- Re-check `.env` values
-- Delete `twitch_tokens.json` and re-authenticate if scopes changed
+For each reward you want live:
+
+1. Create the reward (Channel Points → Manage Rewards).
+2. Title **must match** an entry in `rewards_config.json`.
+3. For TTS / Spelling Bee: enable **user input** text.
+4. Set cost, cooldown, max per stream as you like.
+
+---
+
+## 9. TTS tags (for reward description)
+
+Viewers can embed these in the TTS text box:
+
+**Voices / accents**
+```text
+[male] [female] [british] [australian] [indian] [irish] [south_african] [canadian] [anime]
+```
+
+**Effects**
+```text
+[normal] [slow] [fast] [chipmunk] [deep] [robot] [whisper]
+```
+
+Example: `[australian] G'day [slow] mate [chipmunk] woo!`
+
+Same tag twice toggles off; `[normal]` resets effects.
+
+---
+
+## 10. Queue, skip, and chat commands
+
+Heavy rewards (TTS, flashbang, spelling bee, hide cam, stream ender) run **one at a time**. Short SFX stack.
+
+| Control | How |
+|---------|-----|
+| Skip current queued reward | Hotkey `SKIP_REWARD_HOTKEY` (default **F8**) |
+| Skip from chat | `!skip` (broadcaster / mods) |
+| Queue status | `!queue` |
+
+---
+
+## 11. First chatter & ignored bots
+
+- First chat message of the stream triggers a fireworks-style celebration.
+- Resets automatically on **stream.online** (EventSub).
+- Bots to ignore: edit `ignored_chatters.json` (includes `streamelements`, `nightbot`, etc.).
+
+---
+
+## 12. Run the bot
+
+```powershell
+python twitch.py
+```
+
+First run opens a browser for Twitch OAuth. Tokens are saved to `twitch_tokens.json`.
+
+You should see lines like:
+- Connected to OBS  
+- Audio bridge server running  
+- Reward queue started  
+- Subscribed to stream.online + channel points  
+- `press ENTER to stop`
+
+---
+
+## 13. Troubleshooting
+
+| Problem | What to check |
+|---------|----------------|
+| No TTS/audio in OBS | Bot running? Browser source URL exact? Refresh cache. Try `AUDIO_ROUTING_MODE = "both"`. |
+| Overlay / flash missing | Overlay URL; `RewardOverlay` on top; color-correction filter name. |
+| Reward does nothing | Title mismatch in `rewards_config.json`; restart bot; check console logs. |
+| Queue never starts | Do not block the process oddly; use latest `twitch.py` (Enter is waited in a thread). |
+| StreamElements is first chatter | Confirm login in `ignored_chatters.json`; look for skip log line. |
+| Auth / scope errors | Fix `.env`; delete `twitch_tokens.json`; run again. |
+| Skip hotkey invalid | Use forms like `f8` or `ctrl+shift+s` in `config.py`. |
+| Spelling bee no definition | Needs internet (Datamuse); rare words are retried automatically. |
+| Sound not playing | File path under `sounds/`; volume in params; `AUDIO_ROUTING_MODE`. |
+
+---
+
+## 14. File map
+
+| File | Role |
+|------|------|
+| `twitch.py` | Entry point, chat, EventSub, hotkey |
+| `rewards.py` | Action handlers (SFX, TTS, flashbang, spelling bee, …) |
+| `rewards_config.json` | Title → action mapping |
+| `tts_handler.py` | Edge-TTS + effect tags |
+| `audio_handler.py` | Local / browser playback |
+| `obs_handler.py` | OBS WebSocket + local HTTP bridge |
+| `image_handler.py` | Overlay layers, fireworks, text |
+| `reward_queue.py` | Serial queue + skip |
+| `config.py` | Non-secret settings |
+| `.env` | Secrets |
+| `ignored_chatters.json` | First-chatter ignore list |
+| `blocked_terms_dont_open_on_stream.json` | TTS moderation list |
