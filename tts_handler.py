@@ -35,18 +35,16 @@ VOICES = {
     "robot": "en-US-EricNeural",
 }
 
-# Voice effect presets
+# Voice effect presets (kept lean + distinct for Twitch reward description space)
+# Removed near-duplicates: high (~chipmunk), excited (~fast), sad (~slow/whisper)
 EFFECTS = {
     "normal": {"rate": "+0%", "pitch": "+0Hz"},
-    "slow": {"rate": "-40%", "pitch": "+0Hz"},
-    "fast": {"rate": "+50%", "pitch": "+0Hz"},
-    "high": {"rate": "+0%", "pitch": "+80Hz"},
-    "chipmunk": {"rate": "+20%", "pitch": "+100Hz"},
-    "deep": {"rate": "-20%", "pitch": "-50Hz"},
-    "robot": {"rate": "-15%", "pitch": "-20Hz"},
-    "whisper": {"rate": "-30%", "pitch": "-10Hz"},
-    "excited": {"rate": "+30%", "pitch": "+30Hz"},
-    "sad": {"rate": "-30%", "pitch": "-20Hz"},
+    "slow": {"rate": "-65%", "pitch": "-15Hz"},
+    "fast": {"rate": "+85%", "pitch": "+20Hz"},
+    "chipmunk": {"rate": "+45%", "pitch": "+160Hz"},
+    "deep": {"rate": "-35%", "pitch": "-90Hz"},
+    "robot": {"rate": "-40%", "pitch": "-55Hz"},
+    "whisper": {"rate": "-55%", "pitch": "-35Hz"},
 }
 
 # Create temp directory for TTS files
@@ -90,8 +88,7 @@ async def parse_and_speak(text, base_voice="female", volume=1.0, speaker=None):
     Example: "[australian] G'day [indian] namaste [female] back to female"
     
     Supported effect tags:
-        [normal] [slow] [fast] [high] [chipmunk] [deep] [robot]
-        [whisper] [excited] [sad]
+        [normal] [slow] [fast] [chipmunk] [deep] [robot] [whisper]
     Supported accent/voice tags:
         [male] [female] [british] [australian] [indian]
         [irish] [south_african] [canadian]
@@ -336,20 +333,21 @@ async def tts_with_effects(text, effect="normal", volume=1.0):
     
     Effects:
         - normal: Standard voice
-        - fast: 50% faster
-        - slow: 50% slower
-        - chipmunk: High pitched
-        - deep: Low pitched
-        - robot: Slow and monotone
+        - fast: Much faster
+        - slow: Much slower
+        - chipmunk: Very high pitched
+        - deep: Very low pitched
+        - robot: Slow and low/monotone
+        - whisper: Very slow and low
     """
     effects = {
         "normal": {"rate": "+0%", "pitch": "+0Hz", "voice": "default"},
-        "fast": {"rate": "+50%", "pitch": "+0Hz", "voice": "default"},
-        "slow": {"rate": "-50%", "pitch": "+0Hz", "voice": "default"},
-        "chipmunk": {"rate": "+25%", "pitch": "+100Hz", "voice": "female"},
-        "deep": {"rate": "-25%", "pitch": "-50Hz", "voice": "deep"},
-        "robot": {"rate": "-10%", "pitch": "-10Hz", "voice": "robot"},
-        "anime": {"rate": "+10%", "pitch": "+20Hz", "voice": "anime"},
+        "fast": {"rate": "+85%", "pitch": "+20Hz", "voice": "default"},
+        "slow": {"rate": "-65%", "pitch": "-15Hz", "voice": "default"},
+        "chipmunk": {"rate": "+45%", "pitch": "+160Hz", "voice": "female"},
+        "deep": {"rate": "-35%", "pitch": "-90Hz", "voice": "deep"},
+        "robot": {"rate": "-40%", "pitch": "-55Hz", "voice": "robot"},
+        "whisper": {"rate": "-55%", "pitch": "-35Hz", "voice": "default"},
     }
     
     config = effects.get(effect, effects["normal"])
