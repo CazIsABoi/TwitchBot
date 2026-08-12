@@ -1,52 +1,40 @@
 {
   "events": [
     {
-      "kind": "audio",
-      "mode": "sfx",
-      "session_id": "b5a1a9a3e5044132b97b8b317e48b059",
-      "created_at": 1786246887765,
-      "token": "deae31dbb9cf43e7874c181df1fd9367",
+      "kind": "caption",
+      "mode": "tts",
+      "session_id": "dd7f7ba231704b338b6f81ebff33d88f",
+      "created_at": 1786493499672,
+      "file": "",
+      "token": "812359cdf3fe4c849ea8cab3fe7d1dd8",
       "volume": 1.0,
-      "caption": "",
-      "speaker": "",
-      "text": "",
-      "file": "sounds/flashbang.mp3"
+      "caption": "CazIsABoi said: what the helly",
+      "speaker": "CazIsABoi",
+      "text": "what the helly"
     },
     {
-      "kind": "audio",
-      "mode": "sfx",
-      "session_id": "b5a1a9a3e5044132b97b8b317e48b059",
-      "created_at": 1786246901320,
-      "token": "ce59f3fc6a614891a2614ca5d2640476",
+      "kind": "caption",
+      "mode": "tts",
+      "session_id": "dd7f7ba231704b338b6f81ebff33d88f",
+      "created_at": 1786493513285,
+      "file": "",
+      "token": "5452cc2d55564f92b64884a37ba58d86",
       "volume": 1.0,
-      "caption": "",
-      "speaker": "",
-      "text": "",
-      "file": "sounds/flashbang.mp3"
+      "caption": "CazIsABoi said: AAAAAA",
+      "speaker": "CazIsABoi",
+      "text": "AAAAAA"
     },
     {
-      "kind": "audio",
-      "mode": "sfx",
-      "session_id": "b5a1a9a3e5044132b97b8b317e48b059",
-      "created_at": 1786246915040,
-      "token": "3cf48dcad45e4a38a06bc1584e6bc307",
+      "kind": "caption",
+      "mode": "tts",
+      "session_id": "dd7f7ba231704b338b6f81ebff33d88f",
+      "created_at": 1786493536283,
+      "file": "",
+      "token": "78f40ed49e7c4e8ba722abf665581244",
       "volume": 1.0,
-      "caption": "",
-      "speaker": "",
-      "text": "",
-      "file": "sounds/flashbang.mp3"
-    },
-    {
-      "kind": "audio",
-      "mode": "sfx",
-      "session_id": "b5a1a9a3e5044132b97b8b317e48b059",
-      "created_at": 1786246928710,
-      "token": "531a144f228642d9a575bd408bca3edc",
-      "volume": 1.0,
-      "caption": "",
-      "speaker": "",
-      "text": "",
-      "file": "sounds/flashbang.mp3"
+      "caption": "CazIsABoi said: pen pen pen pen",
+      "speaker": "CazIsABoi",
+      "text": "pen pen pen pen"
     }
   ]
 }

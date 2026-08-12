@@ -187,50 +187,301 @@ def _build_spelling_api_url(user_input):
     return f"{base_url}{separator}{urlencode(query)}"
 
 
-def fetch_spelling_word(user_input=None):
-    api_url = _build_spelling_api_url(user_input)
-    try:
-        with urlopen(api_url, timeout=8) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except URLError as error:
-        raise RuntimeError(f"Could not reach spelling word API: {error}") from error
-    except Exception as error:
-        raise RuntimeError(f"Could not parse spelling word API response: {error}") from error
-
-    if not isinstance(payload, list) or not payload:
-        raise RuntimeError("Spelling word API returned no words")
-
-    word = str(payload[0]).strip()
-    normalized = _normalize_spelling_word(word)
-    if not normalized:
-        raise RuntimeError(f"Spelling word API returned an unusable word: {word!r}")
-    return word, normalized
-
-
-def prompt_streamer_for_spelling_answer():
-    prompt_message = (
-        "Spell the word the streamer just heard.\n\n"
-        "Type the answer, type REPEAT to hear it again, or leave blank/cancel to skip."
+def _http_get_json(url, timeout=8):
+    from urllib.request import Request
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "TwitchBot-SpellingBee/1.0",
+            "Accept": "application/json",
+        },
     )
+    with urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _definition_candidates(word):
+    """Return lookup variants (exact, stripped plural, etc.)."""
+    cleaned = _normalize_spelling_word(word)
+    if not cleaned:
+        return []
+    variants = [cleaned]
+    # Common plural / suffix fallbacks so rare API words still resolve.
+    for suffix, repl in (("inesses", "y"), ("iness", "y"), ("ies", "y"), ("ses", "s"),
+                         ("es", ""), ("s", ""), ("ed", ""), ("ing", "")):
+        if cleaned.endswith(suffix) and len(cleaned) - len(suffix) >= 3:
+            variants.append(cleaned[: -len(suffix)] + repl)
+    # de-dupe, keep order
+    seen = set()
+    ordered = []
+    for item in variants:
+        if item and item not in seen:
+            seen.add(item)
+            ordered.append(item)
+    return ordered
+
+
+def fetch_word_definition(word):
+    """Look up a short English definition (Datamuse first, dictionaryapi fallback)."""
+    for candidate in _definition_candidates(word):
+        # 1) Datamuse — better coverage for common + uncommon words
+        try:
+            payload = _http_get_json(
+                f"https://api.datamuse.com/words?sp={candidate}&md=d&max=1",
+                timeout=6,
+            )
+            if isinstance(payload, list) and payload:
+                defs = payload[0].get("defs") or []
+                if defs:
+                    raw = str(defs[0]).strip()
+                    # Datamuse format: "n\tdefinition text"
+                    if "\t" in raw:
+                        part, meaning = raw.split("\t", 1)
+                    elif "	" in raw:
+                        part, meaning = raw.split("	", 1)
+                    else:
+                        part, meaning = "", raw
+                    meaning = meaning.strip()
+                    part = part.strip()
+                    if meaning:
+                        # Keep it short for TTS + dialog
+                        if len(meaning) > 140:
+                            meaning = meaning[:137].rsplit(" ", 1)[0] + "…"
+                        part_map = {
+                            "n": "noun", "v": "verb", "adj": "adjective",
+                            "adv": "adverb", "u": "",
+                        }
+                        label = part_map.get(part, part)
+                        return f"({label}) {meaning}" if label else meaning
+        except Exception as error:
+            print(f"⚠️ Datamuse lookup failed for {candidate!r}: {error}")
+
+        # 2) Free Dictionary API fallback
+        try:
+            payload = _http_get_json(
+                f"https://api.dictionaryapi.dev/api/v2/entries/en/{candidate}",
+                timeout=6,
+            )
+            if isinstance(payload, list) and payload:
+                for meaning in payload[0].get("meanings") or []:
+                    part = str(meaning.get("partOfSpeech") or "").strip()
+                    for definition_entry in meaning.get("definitions") or []:
+                        definition = str(definition_entry.get("definition") or "").strip()
+                        if definition:
+                            if len(definition) > 140:
+                                definition = definition[:137].rsplit(" ", 1)[0] + "…"
+                            return f"({part}) {definition}" if part else definition
+        except Exception as error:
+            print(f"⚠️ DictionaryAPI lookup failed for {candidate!r}: {error}")
+
+    return ""
+
+
+def fetch_spelling_word(user_input=None):
+    """
+    Pick a spelling word that preferably has a dictionary definition.
+    Retries a few times because the random-word API often returns obscure terms.
+    """
+    last_error = None
+    fallback_word = None
+
+    for attempt in range(8):
+        api_url = _build_spelling_api_url(user_input)
+        try:
+            payload = _http_get_json(api_url, timeout=8)
+        except URLError as error:
+            last_error = error
+            continue
+        except Exception as error:
+            last_error = error
+            continue
+
+        if not isinstance(payload, list) or not payload:
+            continue
+
+        word = str(payload[0]).strip()
+        normalized = _normalize_spelling_word(word)
+        if not normalized:
+            continue
+
+        if fallback_word is None:
+            fallback_word = (word, normalized)
+
+        definition = fetch_word_definition(word)
+        if definition:
+            return word, normalized, definition
+
+        print(f"⚠️ No definition for {word!r}, trying another word ({attempt + 1}/8)")
+
+    if fallback_word is not None:
+        word, normalized = fallback_word
+        return word, normalized, ""
+
+    if last_error is not None:
+        raise RuntimeError(f"Could not reach spelling word API: {last_error}") from last_error
+    raise RuntimeError("Spelling word API returned no usable words")
+
+
+def prompt_streamer_for_spelling_answer(definition=""):
+    """Custom Spelling Bee dialog with definition, styled inputs, and action buttons."""
     try:
         import tkinter as tk
-        from tkinter import simpledialog
+        from tkinter import font as tkfont
+
+        result = {"value": None}
 
         root = tk.Tk()
-        root.withdraw()
+        root.title("Spelling Bee")
         root.attributes("-topmost", True)
+        root.resizable(False, False)
+        root.configure(bg="#12141c")
+
+        # Center on screen
+        width, height = 520, 360
         root.update_idletasks()
-        answer = simpledialog.askstring(
-            title="Spelling Bee",
-            prompt=prompt_message,
-            parent=root,
+        screen_w = root.winfo_screenwidth()
+        screen_h = root.winfo_screenheight()
+        x = max((screen_w - width) // 2, 0)
+        y = max((screen_h - height) // 3, 0)
+        root.geometry(f"{width}x{height}+{x}+{y}")
+
+        title_font = tkfont.Font(family="Segoe UI", size=18, weight="bold")
+        body_font = tkfont.Font(family="Segoe UI", size=11)
+        def_font = tkfont.Font(family="Segoe UI", size=11, slant="italic")
+        button_font = tkfont.Font(family="Segoe UI", size=10, weight="bold")
+
+        outer = tk.Frame(root, bg="#12141c", padx=22, pady=18)
+        outer.pack(fill="both", expand=True)
+
+        tk.Label(
+            outer,
+            text="🐝  Spelling Bee",
+            font=title_font,
+            fg="#f2f5ff",
+            bg="#12141c",
+        ).pack(anchor="w")
+
+        tk.Label(
+            outer,
+            text="Listen carefully, then type the word below.",
+            font=body_font,
+            fg="#a7b2cc",
+            bg="#12141c",
+        ).pack(anchor="w", pady=(4, 12))
+
+        def_box = tk.Frame(outer, bg="#1a1f2b", highlightbackground="#2b3345", highlightthickness=1)
+        def_box.pack(fill="x", pady=(0, 14))
+
+        tk.Label(
+            def_box,
+            text="DEFINITION",
+            font=tkfont.Font(family="Segoe UI", size=9, weight="bold"),
+            fg="#4cd2ff",
+            bg="#1a1f2b",
+        ).pack(anchor="w", padx=14, pady=(10, 2))
+
+        definition_text = str(definition or "").strip() or "No definition found — rely on the spoken word."
+        def_label = tk.Label(
+            def_box,
+            text=definition_text,
+            font=def_font,
+            fg="#e8ecf8",
+            bg="#1a1f2b",
+            wraplength=460,
+            justify="left",
         )
-        root.destroy()
-        return answer
+        def_label.pack(anchor="w", padx=14, pady=(0, 12))
+
+        tk.Label(
+            outer,
+            text="Your spelling",
+            font=tkfont.Font(family="Segoe UI", size=9, weight="bold"),
+            fg="#a7b2cc",
+            bg="#12141c",
+        ).pack(anchor="w")
+
+        entry_var = tk.StringVar()
+        entry = tk.Entry(
+            outer,
+            textvariable=entry_var,
+            font=tkfont.Font(family="Segoe UI", size=16),
+            bg="#0f131d",
+            fg="#ffffff",
+            insertbackground="#ffffff",
+            relief="flat",
+            highlightthickness=2,
+            highlightbackground="#36445f",
+            highlightcolor="#4cd2ff",
+        )
+        entry.pack(fill="x", ipady=10, pady=(6, 16))
+        entry.focus_set()
+
+        hint = tk.Label(
+            outer,
+            text="Enter = submit   ·   Esc = skip   ·   or use the buttons",
+            font=tkfont.Font(family="Segoe UI", size=9),
+            fg="#6b7690",
+            bg="#12141c",
+        )
+        hint.pack(anchor="w", pady=(0, 10))
+
+        buttons = tk.Frame(outer, bg="#12141c")
+        buttons.pack(fill="x")
+
+        def style_button(btn, bg, fg="#02131a"):
+            btn.configure(
+                bg=bg,
+                fg=fg,
+                activebackground=bg,
+                activeforeground=fg,
+                relief="flat",
+                bd=0,
+                padx=14,
+                pady=8,
+                cursor="hand2",
+                font=button_font,
+            )
+
+        def finish(value):
+            result["value"] = value
+            root.destroy()
+
+        def on_submit(_event=None):
+            finish(entry_var.get())
+
+        def on_repeat():
+            finish("REPEAT")
+
+        def on_skip():
+            finish("")
+
+        submit_btn = tk.Button(buttons, text="Submit", command=on_submit)
+        style_button(submit_btn, "#4cd2ff")
+        submit_btn.pack(side="left")
+
+        repeat_btn = tk.Button(buttons, text="Repeat word", command=on_repeat)
+        style_button(repeat_btn, "#9eb0d5")
+        repeat_btn.pack(side="left", padx=(10, 0))
+
+        skip_btn = tk.Button(buttons, text="Skip", command=on_skip)
+        style_button(skip_btn, "#3a4254", fg="#f2f5ff")
+        skip_btn.pack(side="right")
+
+        root.bind("<Return>", on_submit)
+        root.bind("<Escape>", lambda _e: on_skip())
+        root.protocol("WM_DELETE_WINDOW", on_skip)
+
+        # Keep above other windows while the streamer answers.
+        root.lift()
+        root.focus_force()
+        root.mainloop()
+        return result["value"]
     except Exception as error:
         print(f"⚠️ Could not open spelling dialog, falling back to console input: {error}")
         try:
-            return input("Spelling Bee: type the answer, REPEAT to hear the word again, or press Enter to skip: ")
+            return input(
+                "Spelling Bee: type the answer, REPEAT to hear the word again, or press Enter to skip: "
+            )
         except EOFError:
             return None
 
@@ -365,7 +616,9 @@ async def spelling_bee(redemption, params):
         return
 
     try:
-        word, normalized_word = await asyncio.to_thread(fetch_spelling_word, redemption.event.user_input)
+        word, normalized_word, definition = await asyncio.to_thread(
+            fetch_spelling_word, redemption.event.user_input
+        )
     except Exception as error:
         print(f"❌ Could not start spelling challenge: {error}")
         await parse_and_speak(
@@ -375,29 +628,35 @@ async def spelling_bee(redemption, params):
         )
         return
 
-    intro = "Spelling Bee punishment. Streamer, spell this word."
+    if definition:
+        print(f"📖 Definition for {word}: {definition}")
+    else:
+        print(f"📖 No definition found for {word}")
+
+    # Do not show the answer word on stream while active — only status.
     show_spelling_challenge_in_browser_source(
         word=word,
-        status="Streamer must spell this word now",
+        status="Spell the word",
         state="active",
-        reveal_word=True,
+        reveal_word=False,
     )
-    await parse_and_speak(intro, base_voice="female", speaker="Spelling Bee")
+    # Definition is shown in the local dialog only — do not read it aloud.
+    await parse_and_speak("Spell this word.", base_voice="female", speaker="Spelling Bee")
     await parse_and_speak(word, base_voice="female", speaker="Spelling Bee")
 
     answer = None
     while True:
-        answer = await asyncio.to_thread(prompt_streamer_for_spelling_answer)
+        answer = await asyncio.to_thread(prompt_streamer_for_spelling_answer, definition)
         if answer is None:
             break
         if str(answer).strip().lower() == "repeat":
             show_spelling_challenge_in_browser_source(
                 word=word,
-                status="Word replayed",
+                status="Replaying word",
                 state="active",
-                reveal_word=True,
+                reveal_word=False,
             )
-            await parse_and_speak("Listen again.", base_voice="female", speaker="Spelling Bee")
+            # Just replay the word — no extra "listen again" line.
             await parse_and_speak(word, base_voice="female", speaker="Spelling Bee")
             continue
         break

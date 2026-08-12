@@ -1,5 +1,6 @@
 # Twitch Bot - Don't commit sensitive files
 .env
+env
 twitch_tokens.json
 config.local.py
 *.pyc
