@@ -56,7 +56,7 @@ def main() -> int:
         )
         full = header + details
         print("\n" + "=" * 60, flush=True)
-        print("TwitchBot failed to start:", flush=True)
+        print("CazIsABot failed to start:", flush=True)
         print("=" * 60, flush=True)
         print(full, flush=True)
         log_path = _write_crash(full)

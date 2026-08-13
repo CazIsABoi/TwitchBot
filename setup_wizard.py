@@ -1,5 +1,5 @@
 """
-First-run setup wizard for TwitchBot.
+First-run setup wizard for CazIsABot.
 
 Modes:
 - Full: ask for Twitch app credentials + channel + OBS (developer / first owner setup)
@@ -119,7 +119,7 @@ def run_wizard(force: bool = False) -> bool:
     result = {"saved": False}
 
     root = tk.Tk()
-    root.title("TwitchBot Setup")
+    root.title("CazIsABot Setup")
     root.attributes("-topmost", True)
     root.resizable(True, True)
     root.configure(bg="#12141c")
@@ -169,7 +169,7 @@ def run_wizard(force: bool = False) -> bool:
 
     tk.Label(
         outer,
-        text="TwitchBot Setup",
+        text="CazIsABot Setup",
         font=("Segoe UI", 18, "bold"),
         fg="#f2f5ff",
         **pad,

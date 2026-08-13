@@ -460,7 +460,7 @@ def main():
 
         details = traceback.format_exc()
         print("\n" + "=" * 60)
-        print("TwitchBot crashed with an unhandled exception:")
+        print("CazIsABot crashed with an unhandled exception:")
         print("=" * 60)
         print(details)
         print(f"frozen={getattr(sys, 'frozen', False)} exe={sys.executable}")

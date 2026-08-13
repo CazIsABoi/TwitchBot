@@ -2,9 +2,9 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-title TwitchBot
+title CazIsABot
 echo ============================================
-echo   TwitchBot launcher
+echo   CazIsABot launcher
 echo ============================================
 echo.
 

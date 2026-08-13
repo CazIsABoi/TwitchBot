@@ -2,9 +2,9 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-title Build TwitchBot.exe (Python 3.12)
+title Build CazIsABot.exe (Python 3.12)
 echo ============================================
-echo   Build TwitchBot.exe
+echo   Build CazIsABot.exe
 echo   Requires: Python 3.12 venv
 echo ============================================
 echo.
@@ -84,7 +84,7 @@ for /f "delims=" %%i in ('python -c "import pathlib; print(pathlib.Path(r'''%CFF
 echo Cleaning old build + pycache...
 if exist "build" rmdir /s /q build
 if exist "dist" rmdir /s /q dist
-if exist "TwitchBot.spec" del /q "TwitchBot.spec"
+if exist "CazIsABot.spec" del /q "CazIsABot.spec"
 for /d /r %%d in (__pycache__) do @if exist "%%d" rmdir /s /q "%%d"
 
 set "ADD_DATA=--add-data rewards_config.json;."
@@ -94,7 +94,7 @@ if exist "blocked_terms_dont_open_on_stream.json" set "ADD_DATA=%ADD_DATA% --add
 echo.
 echo Building entry point: launcher.py
 pyinstaller --noconfirm --clean ^
-  --name TwitchBot ^
+  --name CazIsABot ^
   --onedir ^
   --console ^
   %ADD_DATA% ^
@@ -127,32 +127,32 @@ if errorlevel 1 (
   exit /b 1
 )
 
-copy /Y ".env" "dist\TwitchBot\.env" >nul
-if exist "sounds" xcopy /E /I /Y "sounds" "dist\TwitchBot\sounds" >nul
-if not exist "dist\TwitchBot\sounds" mkdir "dist\TwitchBot\sounds"
-if exist "images" xcopy /E /I /Y "images" "dist\TwitchBot\images" >nul
-copy /Y "rewards_config.json" "dist\TwitchBot\rewards_config.json" >nul
-if exist "ignored_chatters.json" copy /Y "ignored_chatters.json" "dist\TwitchBot\ignored_chatters.json" >nul
-if exist "blocked_terms_dont_open_on_stream.json" copy /Y "blocked_terms_dont_open_on_stream.json" "dist\TwitchBot\blocked_terms_dont_open_on_stream.json" >nul
+copy /Y ".env" "dist\CazIsABot\.env" >nul
+if exist "sounds" xcopy /E /I /Y "sounds" "dist\CazIsABot\sounds" >nul
+if not exist "dist\CazIsABot\sounds" mkdir "dist\CazIsABot\sounds"
+if exist "images" xcopy /E /I /Y "images" "dist\CazIsABot\images" >nul
+copy /Y "rewards_config.json" "dist\CazIsABot\rewards_config.json" >nul
+if exist "ignored_chatters.json" copy /Y "ignored_chatters.json" "dist\CazIsABot\ignored_chatters.json" >nul
+if exist "blocked_terms_dont_open_on_stream.json" copy /Y "blocked_terms_dont_open_on_stream.json" "dist\CazIsABot\blocked_terms_dont_open_on_stream.json" >nul
 
-copy /Y "%CFFI_PYD%" "dist\TwitchBot\%CFFI_NAME%" >nul
-if exist "dist\TwitchBot\_internal" copy /Y "%CFFI_PYD%" "dist\TwitchBot\_internal\%CFFI_NAME%" >nul
+copy /Y "%CFFI_PYD%" "dist\CazIsABot\%CFFI_NAME%" >nul
+if exist "dist\CazIsABot\_internal" copy /Y "%CFFI_PYD%" "dist\CazIsABot\_internal\%CFFI_NAME%" >nul
 
 (
 echo @echo off
 echo cd /d "%%~dp0"
-echo TwitchBot.exe
+echo CazIsABot.exe
 echo echo Exit code: %%ERRORLEVEL%%
 echo if exist crash.log type crash.log
 echo pause
-) > "dist\TwitchBot\Run TwitchBot.bat"
+) > "dist\CazIsABot\Run CazIsABot.bat"
 
 echo.
 echo ============================================
 echo Verify:
 findstr /C:"just_playback" "audio_handler.py" | findstr /V "Lazy\|just_playback\|from just"
 echo Entry should be launcher - check dist folder.
-dir /b "dist\TwitchBot\_internal\_cffi*" 2>nul
+dir /b "dist\CazIsABot\_internal\_cffi*" 2>nul
 echo.
-echo Run: dist\TwitchBot\Run TwitchBot.bat
+echo Run: dist\CazIsABot\Run CazIsABot.bat
 pause

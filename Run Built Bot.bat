@@ -1,12 +1,12 @@
 @echo off
-cd /d "%~dp0dist\TwitchBot"
-if not exist TwitchBot.exe (
+cd /d "%~dp0dist\CazIsABot"
+if not exist CazIsABot.exe (
   echo Build the bot first with build_exe.bat
   pause
   exit /b 1
 )
-echo Starting TwitchBot from dist...
-TwitchBot.exe
+echo Starting CazIsABot from dist...
+CazIsABot.exe
 echo.
 echo Exit code: %ERRORLEVEL%
 if exist crash.log (

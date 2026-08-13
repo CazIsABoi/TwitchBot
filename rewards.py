@@ -36,6 +36,7 @@ from config import (
     SPELLING_REWARD_WORD_MAX_LENGTH,
     REWARDS_CONFIG_FILE,
     QUEUED_REWARD_ACTIONS,
+    BOT_ROOT,
 )
 from reward_queue import reward_queue
 
@@ -528,6 +529,15 @@ async def stream_ender(redemption, params):
 @action_handler("flashbang")
 async def flashbang(redemption, params):
     total_flash = FLASHBANG_HOLD_SECONDS + FLASHBANG_FADE_SECONDS
+    sound_path = Path(BOT_ROOT) / "sounds" / "flashbang.mp3"
+    if not sound_path.exists():
+        alt = Path("sounds/flashbang.mp3")
+        sound_path = alt if alt.exists() else sound_path
+    if not sound_path.exists():
+        print(f"❌ flashbang.mp3 missing at {Path(BOT_ROOT) / 'sounds' / 'flashbang.mp3'}")
+    else:
+        print(f"💥 Flashbang sound: {sound_path}")
+
     original_filter_settings = await get_source_filter_settings(
         OBS_WEBCAM_SOURCE,
         OBS_WEBCAM_COLOR_CORRECTION_FILTER,
@@ -546,13 +556,20 @@ async def flashbang(redemption, params):
                 {"gamma": boosted_gamma_value},
             )
             gamma_boost_applied = True
+            print(f"💥 Webcam gamma {original_gamma_value} → {boosted_gamma_value}")
         else:
             print(
                 "⚠️ Webcam gamma boost skipped: existing gamma value is missing or non-numeric "
                 f"({gamma_value!r})"
             )
+    else:
+        print(
+            f"⚠️ No filter '{OBS_WEBCAM_COLOR_CORRECTION_FILTER}' on '{OBS_WEBCAM_SOURCE}' "
+            "(gamma boost skipped)"
+        )
 
     try:
+        # Run flash + sound together; each has its own timeouts so the queue cannot stall forever.
         await asyncio.gather(
             show_main_monitor_flash(
                 duration=total_flash,
@@ -562,25 +579,29 @@ async def flashbang(redemption, params):
                 start_delay=0.0,
             ),
             play_sound_local_and_browser(
-                "sounds/flashbang.mp3",
+                str(sound_path),
                 local_volume=FLASHBANG_LOCAL_VOLUME,
                 browser_volume=FLASHBANG_BROWSER_VOLUME,
                 browser_mode="sfx",
                 wait_for_local=False,
             ),
         )
+    except Exception as error:
+        print(f"❌ Flashbang error: {error}")
     finally:
         if gamma_boost_applied and original_gamma_value is not None:
-            await set_source_filter(
-                OBS_WEBCAM_SOURCE,
-                OBS_WEBCAM_COLOR_CORRECTION_FILTER,
-                {"gamma": original_gamma_value},
-            )
+            try:
+                await set_source_filter(
+                    OBS_WEBCAM_SOURCE,
+                    OBS_WEBCAM_COLOR_CORRECTION_FILTER,
+                    {"gamma": original_gamma_value},
+                )
+            except Exception as restore_error:
+                print(f"⚠️ Could not restore webcam gamma: {restore_error}")
 
     print(
-        f"{redemption.event.user_name} flashbanged main monitor only! "
-        f"local_vol={FLASHBANG_LOCAL_VOLUME} browser_vol={FLASHBANG_BROWSER_VOLUME} "
-        f"gamma_boost={FLASHBANG_WEBCAM_GAMMA_BOOST}"
+        f"✅ {redemption.event.user_name} flashbanged "
+        f"(local_vol={FLASHBANG_LOCAL_VOLUME} browser_vol={FLASHBANG_BROWSER_VOLUME})"
     )
 
 

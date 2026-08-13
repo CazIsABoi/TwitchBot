@@ -1,4 +1,4 @@
-# TwitchBot — Quick Start Guide
+# CazIsABoi Bot — Quick Start Guide
 
 Channel points bot with OBS overlays, TTS, sound effects, spelling bee, flashbang, and first-chatter celebrations.
 
@@ -308,7 +308,7 @@ If this bot is **only for you**, you can package it so you double-click an exe i
 
 1. Finish normal setup once (`.env` with your Twitch + OBS values).
 2. Double-click **`build_exe.bat`** (needs Python one last time).
-3. Run **`dist\TwitchBot\TwitchBot.exe`**.
+3. Run **`dist\CazIsABoi\CazIsABoi.exe`**.
 
 The build copies `.env` **next to** the exe (not compiled into the binary). That way:
 - You are not asked for Twitch Client ID/Secret again
@@ -316,9 +316,8 @@ The build copies `.env` **next to** the exe (not compiled into the binary). That
 - Python source stays out of the way
 
 **Security**
-- Do **not** upload or share the `dist\TwitchBot` folder — it contains your app secret
+- Do **not** upload or share the `dist\CazIsABoi` folder — it contains your app secret
 - Secrets inside or beside an exe can still be extracted by a determined person
 - Fine for a private folder on your streaming PC; bad as a public download
 
-Put sound files in `dist\TwitchBot\sounds\`.
-
+Put sound files in `dist\CazIsABoi\sounds\`.
