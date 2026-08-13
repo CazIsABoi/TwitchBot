@@ -144,76 +144,96 @@ async def show_image_overlay(
     )
 
 
-async def show_main_monitor_flash(duration=0.5, color="white", hold_duration=0.0, fade_duration=0.0, start_delay=0.0):
-    """Flash the streamer's primary monitor using an isolated Tkinter process.
+def _run_monitor_flash_blocking(start_delay, hold_duration, fade_duration, color):
+    """Blocking white-screen flash. Safe to run in a worker thread."""
+    import time
 
-    Running Tk in a separate process avoids Tcl thread lifecycle crashes in the bot process.
+    if start_delay > 0:
+        time.sleep(start_delay)
+
+    try:
+        import tkinter as tk
+    except Exception as exc:
+        print(f"❌ Tkinter unavailable for flashbang: {exc}")
+        time.sleep(max(hold_duration + fade_duration, 0.0))
+        return
+
+    root = tk.Tk()
+    root.overrideredirect(True)
+    try:
+        root.attributes("-topmost", True)
+    except Exception:
+        pass
+    root.configure(bg=color)
+
+    try:
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+    except Exception:
+        screen_width, screen_height = 1920, 1080
+    root.geometry(f"{screen_width}x{screen_height}+0+0")
+    try:
+        root.lift()
+        root.focus_force()
+    except Exception:
+        pass
+
+    if fade_duration <= 0:
+        root.after(max(int(hold_duration * 1000), 0), root.destroy)
+    else:
+        step_ms = 16
+        fade_steps = max(int((fade_duration * 1000) / step_ms), 1)
+
+        def begin_fade(step=0):
+            alpha = max(0.0, 1.0 - (step / fade_steps))
+            try:
+                root.attributes("-alpha", alpha)
+            except Exception:
+                pass
+            if step >= fade_steps:
+                root.destroy()
+                return
+            root.after(step_ms, lambda: begin_fade(step + 1))
+
+        root.after(max(int(hold_duration * 1000), 0), begin_fade)
+
+    root.mainloop()
+
+
+async def show_main_monitor_flash(duration=0.5, color="white", hold_duration=0.0, fade_duration=0.0, start_delay=0.0):
+    """Flash the primary monitor white.
+
+    Uses a worker thread (works under both python and frozen .exe).
+    Never blocks the reward queue forever — hard timeout after hold+fade+2s.
     """
     total_hold = max(float(hold_duration), float(duration), 0.0)
     total_fade = max(float(fade_duration), 0.0)
+    start_delay = max(float(start_delay), 0.0)
+    color = str(color or "white")
+    timeout = start_delay + total_hold + total_fade + 2.0
 
-    flash_script = r'''
-import sys
-import time
+    frozen = bool(getattr(sys, "frozen", False))
+    print(
+        f"💥 Monitor flash starting "
+        f"(hold={total_hold:.1f}s fade={total_fade:.1f}s timeout={timeout:.1f}s frozen={frozen})"
+    )
 
-start_delay = float(sys.argv[1])
-hold_duration = float(sys.argv[2])
-fade_duration = float(sys.argv[3])
-color = sys.argv[4]
-
-if start_delay > 0:
-    time.sleep(start_delay)
-
-try:
-    import tkinter as tk
-except Exception as exc:
-    print(f"Tkinter unavailable: {exc}")
-    time.sleep(max(hold_duration + fade_duration, 0.0))
-    raise SystemExit(0)
-
-root = tk.Tk()
-root.overrideredirect(True)
-root.attributes("-topmost", True)
-root.configure(bg=color)
-
-screen_width = root.winfo_screenwidth()
-screen_height = root.winfo_screenheight()
-root.geometry(f"{screen_width}x{screen_height}+0+0")
-root.lift()
-root.focus_force()
-
-if fade_duration <= 0:
-    root.after(max(int(hold_duration * 1000), 0), root.destroy)
-else:
-    step_ms = 16
-    fade_steps = max(int((fade_duration * 1000) / step_ms), 1)
-
-    def begin_fade(step=0):
-        alpha = max(0.0, 1.0 - (step / fade_steps))
-        root.attributes("-alpha", alpha)
-        if step >= fade_steps:
-            root.destroy()
-            return
-        root.after(step_ms, lambda: begin_fade(step + 1))
-
-    root.after(max(int(hold_duration * 1000), 0), begin_fade)
-
-root.mainloop()
-'''
-
+    loop = asyncio.get_running_loop()
     try:
-        process = await asyncio.create_subprocess_exec(
-            sys.executable,
-            "-c",
-            flash_script,
-            str(float(start_delay)),
-            str(total_hold),
-            str(total_fade),
-            str(color),
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+        await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                _run_monitor_flash_blocking,
+                start_delay,
+                total_hold,
+                total_fade,
+                color,
+            ),
+            timeout=timeout,
         )
-        await process.wait()
+        print("💥 Monitor flash finished")
+    except asyncio.TimeoutError:
+        print(f"⚠️ Monitor flash timed out after {timeout:.1f}s — continuing so the queue is not stuck")
     except Exception as error:
         print(f"❌ Error showing local main-monitor flash: {error}")
 
