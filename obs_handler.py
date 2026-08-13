@@ -669,6 +669,36 @@ def _write_layout_editor_html():
         )
 
 
+
+def _sync_bridge_session_id_into_html():
+    """Keep OBS bridge pages on the current process session id.
+
+    Without this, caption/audio events are dropped because the HTML was written
+    with a placeholder or a session id from a previous bot run.
+    """
+    import re
+
+    pattern = re.compile(r"const expectedSessionId = '[^']*';")
+    replacement = f"const expectedSessionId = '{AUDIO_BRIDGE_SESSION_ID}';"
+
+    for bridge_path in (AUDIO_BRIDGE_HTML, TTS_TEXT_BRIDGE_HTML):
+        if not bridge_path.exists():
+            continue
+        try:
+            content = bridge_path.read_text(encoding="utf-8")
+        except OSError as error:
+            print(f"⚠️ Could not read bridge page {bridge_path.name}: {error}")
+            continue
+
+        updated = content.replace("{AUDIO_BRIDGE_SESSION_ID}", AUDIO_BRIDGE_SESSION_ID)
+        updated = pattern.sub(replacement, updated)
+        if updated != content:
+            try:
+                bridge_path.write_text(updated, encoding="utf-8")
+            except OSError as error:
+                print(f"⚠️ Could not update session id in {bridge_path.name}: {error}")
+
+
 def _ensure_audio_bridge_assets():
     """Create the local HTML bridge files used by the OBS browser source."""
     BRIDGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -689,6 +719,7 @@ def _ensure_audio_bridge_assets():
             OVERLAY_TEMP_HTML.write_text("<html><body style='background:transparent;'></body></html>", encoding="utf-8")
 
         _write_layout_editor_html()
+        _sync_bridge_session_id_into_html()
         return
 
     AUDIO_BRIDGE_HTML.write_text(
@@ -990,11 +1021,14 @@ def _ensure_audio_bridge_assets():
 
             const createdAt = Number(event.created_at || 0);
 
-            if (event.session_id) {
-                if (event.session_id !== expectedSessionId) {
-                    return;
-                }
-            } else {
+            const sessionOk = !expectedSessionId
+                || expectedSessionId.indexOf('{') !== -1
+                || !event.session_id
+                || event.session_id === expectedSessionId;
+            if (event.session_id && !sessionOk) {
+                return;
+            }
+            if (!event.session_id) {
                 // Legacy events without session IDs should only pass if they were created right now.
                 if (!createdAt || createdAt < (pageLoadMs - 2000)) {
                     return;
@@ -1185,12 +1219,17 @@ def _ensure_audio_bridge_assets():
             }
 
             const createdAt = Number(event.created_at || 0);
-            if (event.session_id) {
-                if (event.session_id !== expectedSessionId) {
+            const sessionOk = !expectedSessionId
+                || expectedSessionId.indexOf('{') !== -1
+                || !event.session_id
+                || event.session_id === expectedSessionId;
+            if (event.session_id && !sessionOk) {
+                return;
+            }
+            if (!event.session_id) {
+                if (!createdAt || createdAt < (pageLoadMs - 2000)) {
                     return;
                 }
-            } else if (!createdAt || createdAt < (pageLoadMs - 2000)) {
-                return;
             }
 
             // Text-only source: render captions for explicit caption events
@@ -1255,6 +1294,7 @@ def _ensure_audio_bridge_assets():
         OVERLAY_TEMP_HTML.write_text("<html><body style='background:transparent;'></body></html>", encoding="utf-8")
 
     _write_layout_editor_html()
+    _sync_bridge_session_id_into_html()
 
 
 def _start_audio_bridge_server():
@@ -1400,12 +1440,27 @@ def show_caption_in_browser_source(caption="", speaker="", text=""):
         "text": text,
     }
 
+    preview = (text or caption or "").strip()
+    if len(preview) > 80:
+        preview = preview[:77] + "..."
+    print(f"💬 Caption queued for OBS: {preview or '(empty)'}")
+
     if _is_hosted_backend_enabled():
         _post_hosted_event(payload)
         return ensure_audio_browser_source()
 
     _ensure_audio_bridge_assets()
     _append_audio_bridge_event(payload)
+
+    # Quick sanity check so a dead bridge is obvious in logs.
+    try:
+        state = _read_audio_bridge_state()
+        n = len(state.get("events") or [])
+        print(f"💬 Bridge state has {n} event(s); text page: "
+              f"http://127.0.0.1:{AUDIO_BRIDGE_PORT}/bridge/tts_text_bridge.html")
+    except Exception as error:
+        print(f"⚠️ Caption state write check failed: {error}")
+
     return ensure_audio_browser_source()
 
 
@@ -1554,14 +1609,38 @@ async def configure_tts_browser_source(source_name=None, width=1920, height=1080
             height=height,
         )
 
-    return await set_browser_source_url(target_source, "bridge/tts_audio_bridge.html", width=width, height=height)
+    # Cache-bust so OBS reloads the page with this process session id.
+    return await set_browser_source_url(
+        target_source,
+        f"bridge/tts_audio_bridge.html?sid={AUDIO_BRIDGE_SESSION_ID}",
+        width=width,
+        height=height,
+    )
 
 
 async def configure_tts_text_browser_source(source_name=None, width=1920, height=1080):
     """Point a Browser Source at a text-only TTS caption page (no audio playback)."""
     target_source = source_name or OBS_TTS_TEXT_SOURCE
     _ensure_audio_bridge_assets()
-    return await set_browser_source_url(target_source, "bridge/tts_text_bridge.html", width=width, height=height)
+    ok = await set_browser_source_url(
+        target_source,
+        f"bridge/tts_text_bridge.html?sid={AUDIO_BRIDGE_SESSION_ID}",
+        width=width,
+        height=height,
+    )
+    if ok:
+        print(
+            f"💬 Caption source ready: '{target_source}' → "
+            f"http://127.0.0.1:{AUDIO_BRIDGE_PORT}/bridge/tts_text_bridge.html"
+        )
+    else:
+        print(
+            f"⚠️ Caption source '{target_source}' not found in OBS.\n"
+            f"   Add a Browser Source named exactly '{target_source}' with URL:\n"
+            f"   http://127.0.0.1:{AUDIO_BRIDGE_PORT}/bridge/tts_text_bridge.html\n"
+            f"   (1920x1080, transparent background, above your game/cam)"
+        )
+    return ok
 
 
 async def configure_overlay_browser_source(source_name=None, width=1920, height=1080):
