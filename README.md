@@ -21,6 +21,8 @@ Optional: leave **Auto-create OBS browser sources** on so the bot adds `Bot`, `B
 
 Re-run setup anytime: `python setup_wizard.py`
 
+### Or run the latest release and it guides you through setup
+
 ## Twitch app
 
 1. [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) → **Register Your Application**
