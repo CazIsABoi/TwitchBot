@@ -54,28 +54,44 @@ class RewardQueue:
         )
 
     async def start(self):
+        loop = asyncio.get_running_loop()
+        # Module-level singleton can outlive an old loop (e.g. after re-auth / re-run).
+        if self._loop is not None and self._loop is not loop:
+            self._worker_task = None
+            self._current_task = None
+            self._current = None
+            self._queue = asyncio.Queue()
         if self._worker_task is not None and not self._worker_task.done():
             return
-        self._loop = asyncio.get_running_loop()
+        self._loop = loop
         self._worker_task = asyncio.create_task(self._worker(), name="reward-queue-worker")
         print("🚦 Reward queue started (serial mode for heavy rewards)")
 
     async def stop(self):
         self.skip_current(reason="shutdown")
-        if self._worker_task is not None:
-            self._worker_task.cancel()
+        task = self._worker_task
+        self._worker_task = None
+        if task is not None and not task.done():
+            task.cancel()
             try:
-                await self._worker_task
-            except asyncio.CancelledError:
+                await task
+            except (asyncio.CancelledError, RuntimeError):
+                # RuntimeError: queue/task bound to a different event loop during shutdown
                 pass
-            self._worker_task = None
 
-        while not self._queue.empty():
-            try:
+        # Drain without assuming we own the same loop that created the queue
+        try:
+            while True:
                 self._queue.get_nowait()
-                self._queue.task_done()
-            except asyncio.QueueEmpty:
-                break
+                try:
+                    self._queue.task_done()
+                except ValueError:
+                    pass
+        except asyncio.QueueEmpty:
+            pass
+        except RuntimeError:
+            # Recreate empty queue for a future loop
+            self._queue = asyncio.Queue()
 
     async def enqueue(
         self,

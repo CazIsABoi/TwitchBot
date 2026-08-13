@@ -7,9 +7,14 @@ twitch_tokens.json
 config.local.py
 *.pyc
 __pycache__/
+dist/
+build/
 venv/
 .venv/
 temp_tts/
 bridge/tts_audio_state.json
 bridge/overlay_temp.html
 bridge/layout_settings.json
+dist/
+build/
+*.spec

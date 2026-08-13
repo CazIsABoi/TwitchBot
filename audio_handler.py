@@ -1,8 +1,9 @@
 """
 Audio playback handler
-Requires: pip install just_playback
+
+Local playback uses just_playback when available (needs _cffi_backend).
+If that fails (common in PyInstaller builds), browser/OBS routing still works.
 """
-from just_playback import Playback
 import asyncio
 from pathlib import Path
 import threading
@@ -14,7 +15,28 @@ try:
 except Exception:
     AUDIO_ROUTING_MODE = "browser"
 
-# Track active local playback objects so skip can cut them short.
+# Lazy import — do NOT import just_playback at module load time.
+# PyInstaller often fails to ship _cffi_backend; importing at top level kills startup.
+Playback = None
+_JUST_PLAYBACK_ERROR = None
+
+
+def _ensure_playback_class():
+    global Playback, _JUST_PLAYBACK_ERROR
+    if Playback is not None:
+        return Playback
+    if _JUST_PLAYBACK_ERROR is not None:
+        return None
+    try:
+        from just_playback import Playback as _Playback
+        Playback = _Playback
+        return Playback
+    except Exception as error:
+        _JUST_PLAYBACK_ERROR = error
+        print(f"⚠️ Local audio unavailable ({error}). Using browser/OBS routing only.")
+        return None
+
+
 _active_local_lock = threading.Lock()
 _active_local_playbacks = set()
 
@@ -57,7 +79,12 @@ async def _play_sound_local(file_path, volume=1.0, wait_until_complete=True):
         print(f"❌ Audio file not found: {file_path}")
         return None
 
-    playback = Playback()
+    PlaybackCls = _ensure_playback_class()
+    if PlaybackCls is None:
+        print(f"⚠️ Skipping local playback (no backend): {file_path}")
+        return None
+
+    playback = PlaybackCls()
     playback.load_file(str(sound_path))
     playback.set_volume(volume)
     playback.play()
@@ -80,16 +107,8 @@ async def _play_sound_local(file_path, volume=1.0, wait_until_complete=True):
 
 
 async def play_sound(file_path, volume=1.0):
-    """
-    Play an audio file
-
-    Args:
-        file_path: Path to audio file (mp3, wav, ogg, flac)
-        volume: Volume level 0.0 to 1.0
-    """
     try:
         sound_path = Path(file_path)
-
         if not sound_path.exists():
             print(f"❌ Audio file not found: {file_path}")
             return
@@ -109,7 +128,7 @@ async def play_sound(file_path, volume=1.0):
         if routing_mode == "browser" and browser_routed:
             return
 
-        # Local playback path (always for local/both, and as browser fallback).
+        # local or both, or browser failed
         await _play_sound_local(sound_path, volume=volume, wait_until_complete=True)
 
     except asyncio.CancelledError:
@@ -119,13 +138,8 @@ async def play_sound(file_path, volume=1.0):
 
 
 async def play_sound_non_blocking(file_path, volume=1.0):
-    """
-    Play sound without waiting for it to finish
-    Good for overlapping sounds
-    """
     try:
         sound_path = Path(file_path)
-
         if not sound_path.exists():
             print(f"❌ Audio file not found: {file_path}")
             return
@@ -157,12 +171,10 @@ async def play_sound_non_blocking(file_path, volume=1.0):
 
 
 def stop_all_sounds():
-    """Stop tracked local playbacks."""
     stop_current_local_playback()
 
 
 async def play_sound_local(file_path, volume=1.0, wait_until_complete=True):
-    """Play sound directly on the local machine without browser routing."""
     try:
         return await _play_sound_local(file_path, volume=volume, wait_until_complete=wait_until_complete)
     except asyncio.CancelledError:
@@ -173,13 +185,11 @@ async def play_sound_local(file_path, volume=1.0, wait_until_complete=True):
 
 
 async def play_sound_browser(file_path, volume=1.0, mode="sfx"):
-    """Queue sound for OBS browser-source playback only."""
     try:
         sound_path = Path(file_path)
         if not sound_path.exists():
             print(f"❌ Audio file not found: {file_path}")
             return None
-
         bridge_url = queue_audio_for_browser_source(sound_path, volume=volume, mode=mode)
         print(f"🔊 Routed sound to OBS browser source: {bridge_url}")
         return {"routed": "browser", "url": bridge_url}
@@ -195,9 +205,12 @@ async def play_sound_local_and_browser(
     browser_mode="sfx",
     wait_for_local=True,
 ):
-    """Play sound immediately locally and also queue it for browser-source output."""
-    browser_task = asyncio.create_task(play_sound_browser(file_path, volume=browser_volume, mode=browser_mode))
-    local_task = asyncio.create_task(play_sound_local(file_path, volume=local_volume, wait_until_complete=wait_for_local))
+    browser_task = asyncio.create_task(
+        play_sound_browser(file_path, volume=browser_volume, mode=browser_mode)
+    )
+    local_task = asyncio.create_task(
+        play_sound_local(file_path, volume=local_volume, wait_until_complete=wait_for_local)
+    )
     try:
         await asyncio.gather(browser_task, local_task)
     except asyncio.CancelledError:

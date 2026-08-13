@@ -80,7 +80,7 @@ def strip_inline_tts_tags(text):
     return re.sub(r"\s+", " ", cleaned_text).strip()
 
 
-async def parse_and_speak(text, base_voice="female", volume=1.0, speaker=None):
+async def parse_and_speak(text, base_voice="female", volume=1.0, speaker=None, show_caption=True):
     """
     Parse text with inline tags and speak with effects
     
@@ -216,9 +216,9 @@ async def parse_and_speak(text, base_voice="female", volume=1.0, speaker=None):
                 bridge_url = queue_audio_for_browser_source(
                     final_output,
                     volume=volume,
-                    caption=f"{speaker} said: {spoken_text}" if speaker else spoken_text,
-                    speaker=speaker or '',
-                    text=spoken_text,
+                    caption=(f"{speaker} said: {spoken_text}" if speaker else spoken_text) if show_caption else "",
+                    speaker=(speaker or "") if show_caption else "",
+                    text=spoken_text if show_caption else "",
                     mode="tts",
                 )
                 print(f"🔊 Routed TTS to OBS browser source: {bridge_url}")
@@ -226,7 +226,8 @@ async def parse_and_speak(text, base_voice="female", volume=1.0, speaker=None):
             except Exception as bridge_error:
                 print(f"⚠️ TTS browser routing failed: {bridge_error}")
 
-        if use_local_audio():
+        # Captions (BotText) — spelling bee etc. pass show_caption=False
+        if show_caption:
             push_tts_caption(speaker, spoken_text)
 
         if use_local_audio() or not browser_routed:
@@ -280,8 +281,7 @@ async def text_to_speech(text, voice="default", rate="+0%", pitch="+0Hz", volume
                 except Exception as bridge_error:
                     print(f"⚠️ TTS browser routing failed: {bridge_error}")
 
-            if use_local_audio():
-                push_tts_caption(speaker, text)
+            push_tts_caption(speaker, text)
 
             if use_local_audio() or not browser_routed:
                 await play_sound_local(str(output_file), volume=volume, wait_until_complete=True)
@@ -314,8 +314,7 @@ async def text_to_speech(text, voice="default", rate="+0%", pitch="+0Hz", volume
             except Exception as bridge_error:
                 print(f"⚠️ TTS browser routing failed: {bridge_error}")
 
-        if use_local_audio():
-            push_tts_caption(speaker, text)
+        push_tts_caption(speaker, text)
 
         if use_local_audio() or not browser_routed:
             await play_sound_local(str(output_file), volume=volume, wait_until_complete=True)

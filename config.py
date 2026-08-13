@@ -6,20 +6,59 @@ Copy env.example -> .env and fill in real values. Never commit .env.
 Non-secret tuning knobs stay here so they are easy to edit.
 """
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-_BOT_ROOT = Path(__file__).resolve().parent
 
-# Prefer standard .env, but fall back to legacy env filename if present.
-_DOTENV_PATH = _BOT_ROOT / ".env"
-if _DOTENV_PATH.exists():
-    load_dotenv(_DOTENV_PATH)
+def _resolve_bot_root() -> Path:
+    """Folder that holds .env, sounds/, tokens — next to the .exe when frozen."""
+    if getattr(sys, "frozen", False):
+        # PyInstaller onedir: TwitchBot.exe and .env live in the same folder.
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def _resolve_bundle_root() -> Path:
+    """Read-only bundled assets (defaults) when running as a frozen app."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS)
+    return _resolve_bot_root()
+
+
+def _candidate_env_paths(root: Path):
+    """Places we look for secrets (Windows sometimes uses env without a dot)."""
+    return [
+        root / ".env",
+        root / "env",
+        Path.cwd() / ".env",
+        Path.cwd() / "env",
+    ]
+
+
+_BOT_ROOT = _resolve_bot_root()
+_BUNDLE_ROOT = _resolve_bundle_root()
+BOT_ROOT = _BOT_ROOT  # public alias
+BUNDLE_ROOT = _BUNDLE_ROOT
+
+# Load the first env file we can find; override=True so empty shell vars don't win.
+_DOTENV_PATH = None
+for _candidate in _candidate_env_paths(_BOT_ROOT):
+    if _candidate.is_file():
+        load_dotenv(dotenv_path=str(_candidate), override=True)
+        _DOTENV_PATH = _candidate
+        break
+
+if _DOTENV_PATH is not None:
+    print(f"🔐 Loaded settings from: {_DOTENV_PATH}")
 else:
-    _LEGACY_DOTENV_PATH = _BOT_ROOT / "env"
-    if _LEGACY_DOTENV_PATH.exists():
-        load_dotenv(_LEGACY_DOTENV_PATH)
+    print(
+        f"⚠️ No .env found. Looked next to the app at:\n"
+        f"   {_BOT_ROOT / '.env'}\n"
+        f"   {_BOT_ROOT / 'env'}\n"
+        f"   cwd={Path.cwd()}"
+    )
 
 
 def _env(key: str, default: str = "") -> str:
@@ -52,6 +91,16 @@ OBS_PORT = _env_int("OBS_PORT", 4455)
 OBS_PASSWORD = _env("OBS_PASSWORD")
 
 HOSTED_AUDIO_API_KEY = _env("HOSTED_AUDIO_API_KEY")
+
+# When true, bot will create missing OBS browser sources (Bot / BotText / RewardOverlay)
+def _env_bool(key: str, default: bool = False) -> bool:
+    raw = os.getenv(key)
+    if raw is None or str(raw).strip() == "":
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+AUTO_CREATE_OBS_SOURCES = _env_bool("AUTO_CREATE_OBS_SOURCES", True)
 
 # ---------------------------------------------------------------------------
 # OBS source / filter names (must match OBS exactly)
@@ -116,7 +165,11 @@ IGNORED_CHATTERS_FILE = _BOT_ROOT / "ignored_chatters.json"
 
 # Fail fast if required secrets are missing (helps onboarding)
 if not APP_ID or not APP_SECRET:
-    print("⚠️ APP_ID / APP_SECRET missing. Copy env.example to .env and fill them in.")
+    print("⚠️ APP_ID / APP_SECRET missing after loading env.")
+    print(f"   App folder: {_BOT_ROOT}")
+    print(f"   Put a .env file in that folder with APP_ID=... and APP_SECRET=...")
+    if _DOTENV_PATH is not None:
+        print(f"   Loaded file was: {_DOTENV_PATH} (check the keys are not blank)")
 if not TARGET_CHANNEL:
     print("⚠️ TARGET_CHANNEL missing in .env (or env)")
 
@@ -137,3 +190,19 @@ QUEUED_REWARD_ACTIONS = {
 # Examples: "f8", "f9", "ctrl+shift+s", "num_subtract"
 # Set to "" to disable the hotkey (chat !skip still works for the broadcaster).
 SKIP_REWARD_HOTKEY = "f8"
+
+# ---------------------------------------------------------------------------
+# First chatter celebration
+# ---------------------------------------------------------------------------
+# Set False to disable the fireworks / first-message-of-stream feature entirely.
+FIRST_CHATTER_ENABLED = True
+
+# ---------------------------------------------------------------------------
+# TTS caption box (BotText) — easy knobs; layout editor can still override live
+# ---------------------------------------------------------------------------
+# Width/height of the caption box in pixels (inside the 1920x1080 browser source).
+TTS_TEXT_BOX_WIDTH_PX = 900
+TTS_TEXT_BOX_HEIGHT_PX = 220
+TTS_TEXT_FONT_SIZE = 44
+# Cap width as a percent of the preview/safe area (30–100).
+TTS_TEXT_MAX_WIDTH_PERCENT = 70

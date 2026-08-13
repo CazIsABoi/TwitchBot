@@ -1,0 +1,25 @@
+Traceback (most recent call last):
+  File "W:\Bots\TwitchBot\twitch.py", line 435, in main
+    raise
+  File "C:\Users\cazpe\AppData\Local\Python\pythoncore-3.12-64\Lib\asyncio\runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "C:\Users\cazpe\AppData\Local\Python\pythoncore-3.12-64\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\cazpe\AppData\Local\Python\pythoncore-3.12-64\Lib\asyncio\base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "W:\Bots\TwitchBot\twitch.py", line 411, in run
+    await reward_queue.stop()
+  File "W:\Bots\TwitchBot\reward_queue.py", line 68, in stop
+    await self._worker_task
+  File "W:\Bots\TwitchBot\reward_queue.py", line 153, in _worker
+    item = await self._queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\cazpe\AppData\Local\Python\pythoncore-3.12-64\Lib\asyncio\queues.py", line 155, in get
+    getter = self._get_loop().create_future()
+             ^^^^^^^^^^^^^^^^
+  File "C:\Users\cazpe\AppData\Local\Python\pythoncore-3.12-64\Lib\asyncio\mixins.py", line 20, in _get_loop
+    raise RuntimeError(f'{self!r} is bound to a different event loop')
+RuntimeError: <Queue at 0x19d5a495fa0 maxsize=0> is bound to a different event loop

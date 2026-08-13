@@ -45,6 +45,11 @@ if _config is None:
     TTS_TEXT_ANCHOR = "bottom"
     TTS_TEXT_OFFSET_X = 0
     TTS_TEXT_OFFSET_Y = 64
+    TTS_TEXT_BOX_WIDTH_PX = 900
+    TTS_TEXT_BOX_HEIGHT_PX = 220
+    TTS_TEXT_FONT_SIZE = 44
+    TTS_TEXT_MAX_WIDTH_PERCENT = 70
+    AUTO_CREATE_OBS_SOURCES = True
 else:
     OBS_HOST = getattr(_config, "OBS_HOST", "127.0.0.1")
     OBS_PORT = getattr(_config, "OBS_PORT", 4455)
@@ -65,8 +70,16 @@ else:
     TTS_TEXT_ANCHOR = getattr(_config, "TTS_TEXT_ANCHOR", "bottom")
     TTS_TEXT_OFFSET_X = int(getattr(_config, "TTS_TEXT_OFFSET_X", 0))
     TTS_TEXT_OFFSET_Y = int(getattr(_config, "TTS_TEXT_OFFSET_Y", 64))
+    TTS_TEXT_BOX_WIDTH_PX = int(getattr(_config, "TTS_TEXT_BOX_WIDTH_PX", 900))
+    TTS_TEXT_BOX_HEIGHT_PX = int(getattr(_config, "TTS_TEXT_BOX_HEIGHT_PX", 220))
+    TTS_TEXT_FONT_SIZE = int(getattr(_config, "TTS_TEXT_FONT_SIZE", 44))
+    TTS_TEXT_MAX_WIDTH_PERCENT = int(getattr(_config, "TTS_TEXT_MAX_WIDTH_PERCENT", 70))
+    AUTO_CREATE_OBS_SOURCES = bool(getattr(_config, "AUTO_CREATE_OBS_SOURCES", True))
 
-BOT_ROOT = Path(__file__).resolve().parent
+try:
+    from config import BOT_ROOT
+except Exception:
+    BOT_ROOT = Path(__file__).resolve().parent
 AUDIO_BRIDGE_PORT = int(os.getenv("TTS_BROWSER_PORT", "8765"))
 BRIDGE_DIR = BOT_ROOT / "bridge"
 TEMP_TTS_DIR = BOT_ROOT / "temp_tts"
@@ -192,9 +205,32 @@ def _post_hosted_event(payload):
         raise RuntimeError(f"Hosted event POST failed: {error}") from error
 
 
+class QuietThreadingHTTPServer(ThreadingHTTPServer):
+    """Threading HTTP server that does not spam the console on client disconnects."""
+
+    def handle_error(self, request, client_address):
+        import sys
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, OSError)):
+            return  # OBS browser sources abort connections constantly — ignore
+        super().handle_error(request, client_address)
+
+
 class SilentHTTPRequestHandler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         return
+
+    def handle_one_request(self):
+        try:
+            super().handle_one_request()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, OSError):
+            pass
+
+    def finish(self):
+        try:
+            super().finish()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, OSError):
+            pass
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
@@ -220,7 +256,12 @@ class SilentHTTPRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"url": get_layout_editor_url()})
             return
 
-        super().do_GET()
+        try:
+            super().do_GET()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, OSError):
+            # OBS / CEF often aborts mid-transfer when refreshing browser sources.
+            # Not a real failure — ignore so the console stays clean.
+            pass
 
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -308,7 +349,7 @@ def _normalize_tts_anchor(value):
 
 
 def _apply_tts_caption_position_from_config():
-        """Seed caption layout with config-driven anchor/offset defaults."""
+        """Seed caption layout with config-driven anchor/offset/size defaults."""
         _ensure_audio_bridge_assets()
         anchor = _normalize_tts_anchor(TTS_TEXT_ANCHOR)
 
@@ -322,12 +363,33 @@ def _apply_tts_caption_position_from_config():
         except Exception:
                 offset_y = 64 if anchor in {"top", "bottom"} else 0
 
-        # Keep any user-tuned style values and only override placement fields.
+        try:
+                box_w = int(TTS_TEXT_BOX_WIDTH_PX)
+        except Exception:
+                box_w = 900
+        try:
+                box_h = int(TTS_TEXT_BOX_HEIGHT_PX)
+        except Exception:
+                box_h = 220
+        try:
+                font_size = int(TTS_TEXT_FONT_SIZE)
+        except Exception:
+                font_size = 44
+        try:
+                max_w = int(TTS_TEXT_MAX_WIDTH_PERCENT)
+        except Exception:
+                max_w = 70
+
+        # Placement + size from config.py (layout editor can still change live).
         _write_layout_settings({
                 "tts": {
                         "anchor": anchor,
                         "offset_x": offset_x,
                         "offset_y": offset_y,
+                        "box_width_px": max(box_w, 200),
+                        "box_height_px": max(box_h, 80),
+                        "font_size": max(font_size, 12),
+                        "max_width_percent": max(30, min(100, max_w)),
                 }
         })
 
@@ -1232,9 +1294,10 @@ def _ensure_audio_bridge_assets():
                 }
             }
 
-            // Text-only source: render captions for explicit caption events
-            // and also for TTS audio events that carry text metadata.
-            if (event.kind === 'caption' || (event.mode || '') === 'tts') {
+            // Text-only source (BotText): ONLY explicit caption events.
+            // Do not render mode=tts audio events here — spelling bee and other
+            // speak-only calls use show_caption=False and must stay off BotText.
+            if (event.kind === 'caption') {
                 showCaption(event);
             }
         }
@@ -1308,7 +1371,7 @@ def _start_audio_bridge_server():
     handler = partial(SilentHTTPRequestHandler, directory=str(BOT_ROOT))
 
     try:
-        _audio_bridge_server = ThreadingHTTPServer(("127.0.0.1", AUDIO_BRIDGE_PORT), handler)
+        _audio_bridge_server = QuietThreadingHTTPServer(("127.0.0.1", AUDIO_BRIDGE_PORT), handler)
     except OSError as error:
         print(f"❌ Failed to start audio bridge server on port {AUDIO_BRIDGE_PORT}: {error}")
         _audio_bridge_server = None
@@ -1594,6 +1657,112 @@ async def set_browser_source_direct_url(source_name, source_url, width=1920, hei
     except Exception as error:
         print(f"❌ Error setting direct browser source URL for '{source_name}': {error}")
         return False
+
+
+def _input_exists(obs_client, input_name: str) -> bool:
+    """Return True if an OBS input/source with this name already exists."""
+    try:
+        result = obs_client.call(obs_requests.GetInputList())
+        data = getattr(result, "datain", {}) or {}
+        inputs = data.get("inputs") or []
+        target = str(input_name or "").strip().lower()
+        for item in inputs:
+            name = str(item.get("inputName") or "").strip().lower()
+            if name == target:
+                return True
+    except Exception as error:
+        print(f"⚠️ Could not list OBS inputs: {error}")
+    return False
+
+
+def _create_browser_input(obs_client, scene_name: str, input_name: str, url: str, width=1920, height=1080) -> bool:
+    """Create a browser source in the current scene if possible."""
+    settings = {
+        "is_local_file": False,
+        "url": url,
+        "width": int(width),
+        "height": int(height),
+        "css": "body { background-color: rgba(0, 0, 0, 0); margin: 0px; overflow: hidden; }",
+        "shutdown": False,
+        "reroute_audio": False,
+    }
+    try:
+        obs_client.call(obs_requests.CreateInput(
+            sceneName=scene_name,
+            inputName=input_name,
+            inputKind="browser_source",
+            inputSettings=settings,
+            sceneItemEnabled=True,
+        ))
+        print(f"✅ Created OBS browser source '{input_name}' in scene '{scene_name}'")
+        return True
+    except Exception as error:
+        # Some obs-websocket-py builds use different kw names; try a minimal fallback.
+        try:
+            obs_client.call(obs_requests.CreateInput(**{
+                "sceneName": scene_name,
+                "inputName": input_name,
+                "inputKind": "browser_source",
+                "inputSettings": settings,
+                "sceneItemEnabled": True,
+            }))
+            print(f"✅ Created OBS browser source '{input_name}' in scene '{scene_name}'")
+            return True
+        except Exception as error2:
+            print(f"⚠️ Could not create OBS source '{input_name}': {error2}")
+            return False
+
+
+async def ensure_obs_browser_sources(force=None):
+    """Create missing Bot / BotText / RewardOverlay browser sources when enabled.
+
+    Controlled by AUTO_CREATE_OBS_SOURCES in .env / config (wizard toggle).
+    Existing sources are left alone; only missing ones are created.
+    """
+    enabled = AUTO_CREATE_OBS_SOURCES if force is None else bool(force)
+    if not enabled:
+        print("ℹ️ OBS auto-create sources is off (AUTO_CREATE_OBS_SOURCES=false)")
+        return False
+
+    obs = get_obs_client()
+    if not obs:
+        print("⚠️ Skipping OBS auto-create — not connected")
+        return False
+
+    try:
+        scene_name = _get_current_scene_name(obs)
+    except Exception as error:
+        print(f"⚠️ Could not read current OBS scene: {error}")
+        return False
+
+    if not scene_name:
+        print("⚠️ No current OBS scene — open a scene, then restart the bot")
+        return False
+
+    # Make sure local bridge pages exist and the HTTP server is up.
+    _ensure_audio_bridge_assets()
+    ensure_audio_browser_source()
+
+    targets = [
+        (OBS_TTS_SOURCE, f"http://127.0.0.1:{AUDIO_BRIDGE_PORT}/bridge/tts_audio_bridge.html?sid={AUDIO_BRIDGE_SESSION_ID}"),
+        (OBS_TTS_TEXT_SOURCE, f"http://127.0.0.1:{AUDIO_BRIDGE_PORT}/bridge/tts_text_bridge.html?sid={AUDIO_BRIDGE_SESSION_ID}"),
+        (OBS_OVERLAY_SOURCE, f"http://127.0.0.1:{AUDIO_BRIDGE_PORT}/bridge/overlay_temp.html"),
+    ]
+
+    created_any = False
+    for name, url in targets:
+        if _input_exists(obs, name):
+            print(f"ℹ️ OBS source '{name}' already exists — leaving it alone")
+            continue
+        if _create_browser_input(obs, scene_name, name, url):
+            created_any = True
+
+    if created_any:
+        print(
+            "📌 New browser sources were added to the current scene. "
+            "Drag RewardOverlay / BotText above your game & cam if needed."
+        )
+    return created_any
 
 
 async def configure_tts_browser_source(source_name=None, width=1920, height=1080):

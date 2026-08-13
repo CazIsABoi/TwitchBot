@@ -1,28 +1,44 @@
 {
   "events": [
     {
-      "kind": "caption",
-      "mode": "tts",
-      "session_id": "4c724a48f1c240c28ce27460efa3af50",
-      "created_at": 1786601593415,
+      "kind": "spelling",
+      "mode": "spelling",
+      "session_id": "c61c665d47d84ce18d16161d3d52c3d4",
+      "created_at": 1786611068998,
       "file": "",
-      "token": "177780e19b33416c83b5c23d3bff3dea",
+      "token": "af728fef2f61479898d0aa28085a6101",
       "volume": 1.0,
-      "caption": "CazIsABoi said: Hello",
-      "speaker": "CazIsABoi",
-      "text": "Hello"
+      "word": "gripmen",
+      "status": "Spell the word",
+      "state": "active",
+      "reveal_word": false,
+      "spelled_out": ""
+    },
+    {
+      "kind": "spelling",
+      "mode": "spelling",
+      "session_id": "c61c665d47d84ce18d16161d3d52c3d4",
+      "created_at": 1786611078562,
+      "file": "",
+      "token": "ca83d84dfcc04461921e39baa37643c4",
+      "volume": 1.0,
+      "word": "gripmen",
+      "status": "Incorrect",
+      "state": "done",
+      "reveal_word": true,
+      "spelled_out": "G R I P M E N"
     },
     {
       "kind": "caption",
       "mode": "tts",
-      "session_id": "4c724a48f1c240c28ce27460efa3af50",
-      "created_at": 1786601607838,
+      "session_id": "c61c665d47d84ce18d16161d3d52c3d4",
+      "created_at": 1786611099323,
       "file": "",
-      "token": "529c33cf53f54639b69856747e79e3db",
+      "token": "96969ee48ef0411782e74382c78c2dd2",
       "volume": 1.0,
-      "caption": "CazIsABoi said: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "caption": "CazIsABoi said: HAAAAAA",
       "speaker": "CazIsABoi",
-      "text": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      "text": "HAAAAAA"
     }
   ]
 }

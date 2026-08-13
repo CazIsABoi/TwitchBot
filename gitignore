@@ -1,0 +1,99 @@
+# =============================================================================
+# TwitchBot — never commit secrets, build junk, or runtime cache
+# =============================================================================
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+env
+env.*
+!env.example
+twitch_tokens.json
+config.local.py
+*.pem
+*.key
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+develop-eggs/
+downloads/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+.installed.cfg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.conda/
+
+# --- PyInstaller ---
+*.spec
+# keep a committed template if you ever add one:
+# !TwitchBot.spec.example
+
+# --- Bot runtime / cache (regenerated on start) ---
+temp_tts/
+crash.log
+*.log
+
+# Local HTTP bridge state & generated pages (rewritten by obs_handler)
+bridge/tts_audio_state.json
+bridge/overlay_temp.html
+bridge/layout_settings.json
+bridge/tts_audio_bridge.html
+bridge/tts_text_bridge.html
+bridge/layout_editor.html
+
+# --- IDE / editor ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# --- OS ---
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Testing / coverage (if added later) ---
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# --- Optional local notes ---
+*.local
+notes.md
+TODO.local.md

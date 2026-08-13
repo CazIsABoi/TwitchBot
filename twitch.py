@@ -1,4 +1,6 @@
 import asyncio
+import os
+import sys
 import json
 from pathlib import Path
 
@@ -12,7 +14,7 @@ from twitchAPI.object.eventsub import (
     StreamOnlineEvent,
 )
 from twitchAPI.helper import first
-from config import APP_ID, APP_SECRET, TARGET_CHANNEL, IGNORED_CHATTERS_FILE, SKIP_REWARD_HOTKEY
+from config import APP_ID, APP_SECRET, TARGET_CHANNEL, IGNORED_CHATTERS_FILE, SKIP_REWARD_HOTKEY, FIRST_CHATTER_ENABLED
 from rewards import handle_reward, load_rewards_config
 from reward_queue import reward_queue
 from audio_handler import play_sound
@@ -22,6 +24,11 @@ from obs_handler import (
     configure_tts_text_browser_source,
     reset_audio_bridge_events,
 )
+try:
+    from obs_handler import ensure_obs_browser_sources
+except ImportError:
+    ensure_obs_browser_sources = None  # older obs_handler.py without auto-create
+from setup_wizard import setup_is_complete, run_wizard
 
 try:
     from tts_handler import cleanup_tts_cache
@@ -29,7 +36,11 @@ except ImportError:
     cleanup_tts_cache = None
 
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHAT_EDIT, AuthScope.CHANNEL_READ_REDEMPTIONS]
-TOKEN_FILE = Path(__file__).resolve().parent / "twitch_tokens.json"
+try:
+    from config import BOT_ROOT as _ROOT
+except Exception:
+    _ROOT = Path(__file__).resolve().parent
+TOKEN_FILE = _ROOT / "twitch_tokens.json"
 
 FIRST_CHATTER_NAME = None
 FIRST_CHATTER_LOCK = asyncio.Lock()
@@ -164,6 +175,9 @@ async def on_message(msg: ChatMessage):
     global FIRST_CHATTER_NAME
 
     print(f"in {msg.room.name}, {msg.user.name} said: {msg.text}")
+
+    if not FIRST_CHATTER_ENABLED:
+        return
 
     user_name = (msg.user.name or "").strip()
     if not user_name:
@@ -314,6 +328,17 @@ async def on_stream_online(data: StreamOnlineEvent):
 
 
 async def run():
+    # First-run wizard if .env is incomplete (also available via Start Bot.bat)
+    if not setup_is_complete():
+        print("🛠️ First-run setup needed — opening wizard…")
+        ok = await asyncio.get_running_loop().run_in_executor(None, run_wizard)
+        if not ok:
+            print("❌ Setup incomplete. Re-run Start Bot.bat or: python setup_wizard.py")
+            return
+        print("✅ Setup saved. Reloading settings…")
+        # Re-exec so config.py picks up the new .env cleanly
+        os.execv(sys.executable, [sys.executable, *sys.argv])
+
     if not APP_ID or not APP_SECRET:
         print("❌ APP_ID and APP_SECRET are required. Copy env.example to .env and fill them in.")
         return
@@ -323,6 +348,10 @@ async def run():
 
     load_ignored_chatters()
     load_rewards_config()
+    if FIRST_CHATTER_ENABLED:
+        print("🎉 First chatter celebration is ON (config.FIRST_CHATTER_ENABLED)")
+    else:
+        print("🔕 First chatter celebration is OFF (config.FIRST_CHATTER_ENABLED=False)")
 
     try:
         twitch = await Twitch(APP_ID, APP_SECRET)
@@ -342,6 +371,10 @@ async def run():
     reset_audio_bridge_events()
     await configure_tts_browser_source()
     await configure_tts_text_browser_source()
+    if ensure_obs_browser_sources is not None:
+        await ensure_obs_browser_sources()
+    else:
+        print("ℹ️ OBS auto-create sources unavailable (update obs_handler.py to enable it)")
 
     await reward_queue.start()
     skip_listener = start_skip_hotkey_listener(asyncio.get_running_loop())
@@ -381,16 +414,72 @@ async def run():
         )
     finally:
         if cleanup_tts_cache is not None:
-            cleanup_tts_cache()
-        await reward_queue.stop()
+            try:
+                cleanup_tts_cache()
+            except Exception:
+                pass
+        try:
+            await reward_queue.stop()
+        except Exception as stop_error:
+            print(f"⚠️ Queue shutdown note: {stop_error}")
         if skip_listener is not None:
             try:
                 skip_listener.stop()
             except Exception:
                 pass
-        chat.stop()
-        await eventsub.stop()
-        await twitch.close()
+        try:
+            chat.stop()
+        except Exception:
+            pass
+        try:
+            await eventsub.stop()
+        except Exception:
+            pass
+        try:
+            await twitch.close()
+        except Exception:
+            pass
 
 
-asyncio.run(run())
+def _crash_log_path():
+    try:
+        from config import BOT_ROOT
+        return BOT_ROOT / "crash.log"
+    except Exception:
+        return Path(__file__).resolve().parent / "crash.log"
+
+
+def main():
+    """Entry point with visible errors when running as a double-clicked .exe."""
+    try:
+        asyncio.run(run())
+    except SystemExit:
+        raise
+    except BaseException:
+        import traceback
+
+        details = traceback.format_exc()
+        print("\n" + "=" * 60)
+        print("TwitchBot crashed with an unhandled exception:")
+        print("=" * 60)
+        print(details)
+        print(f"frozen={getattr(sys, 'frozen', False)} exe={sys.executable}")
+        print(f"cwd={Path.cwd()}")
+
+        log_path = _crash_log_path()
+        try:
+            log_path.write_text(details, encoding="utf-8")
+            print(f"Full traceback saved to: {log_path}")
+        except Exception as write_error:
+            print(f"(Could not write crash.log: {write_error})")
+
+        print("=" * 60)
+        try:
+            input("Press ENTER to close this window...")
+        except EOFError:
+            pass
+        raise SystemExit(1) from None
+
+
+if __name__ == "__main__":
+    main()

@@ -4,6 +4,29 @@ Channel points bot with OBS overlays, TTS, sound effects, spelling bee, flashban
 
 ---
 
+## 0. Easiest start (recommended)
+
+1. Install [Python 3.11+](https://www.python.org/downloads/) (tick **Add to PATH**).
+2. Open OBS → **Tools → WebSocket Server Settings** → enable, set a password.
+3. Double-click **`Start Bot.bat`**
+4. Fill in the first-run window (Twitch Client ID/Secret, channel, OBS password).
+5. Leave **Auto-create OBS browser sources** checked if you want the bot to add `Bot`, `BotText`, and `RewardOverlay` for you.
+6. Log in with Twitch when the browser opens.
+
+Re-run setup any time:
+
+```powershell
+python setup_wizard.py
+```
+
+Toggle auto-create later in `.env`:
+
+```env
+AUTO_CREATE_OBS_SOURCES=true
+```
+
+---
+
 ## 1. Prerequisites
 
 | Requirement | Notes |
@@ -150,8 +173,10 @@ Missing files log a warning and skip playback — the bot keeps running.
 | Source name (default) | URL |
 |-----------------------|-----|
 | `Bot` | `http://127.0.0.1:8765/bridge/tts_audio_bridge.html` |
-| `BotText` (optional captions) | same bridge / caption page as configured |
+| `BotText` (**required for captions**) | `http://127.0.0.1:8765/bridge/tts_text_bridge.html` |
 | `RewardOverlay` | `http://127.0.0.1:8765/bridge/overlay_temp.html` |
+
+**TTS captions:** create a Browser Source named exactly `BotText` (or match `OBS_TTS_TEXT_SOURCE` in `config.py`), URL as above, 1920×1080, transparent background. Put it above gameplay. Restart the bot after adding it so the URL is applied. When TTS runs you should see a log line: `💬 Caption queued for OBS: ...`
 
 - Put **RewardOverlay** above gameplay and camera.
 - Width/height can match canvas (e.g. 1920×1080); shutdown source when not visible is optional.
@@ -276,3 +301,24 @@ You should see lines like:
 | `.env` | Secrets |
 | `ignored_chatters.json` | First-chatter ignore list |
 | `blocked_terms_dont_open_on_stream.json` | TTS moderation list |
+
+## 15. Personal .exe build (optional)
+
+If this bot is **only for you**, you can package it so you double-click an exe instead of using Python.
+
+1. Finish normal setup once (`.env` with your Twitch + OBS values).
+2. Double-click **`build_exe.bat`** (needs Python one last time).
+3. Run **`dist\TwitchBot\TwitchBot.exe`**.
+
+The build copies `.env` **next to** the exe (not compiled into the binary). That way:
+- You are not asked for Twitch Client ID/Secret again
+- You can still edit OBS password / rewards without rebuilding
+- Python source stays out of the way
+
+**Security**
+- Do **not** upload or share the `dist\TwitchBot` folder — it contains your app secret
+- Secrets inside or beside an exe can still be extracted by a determined person
+- Fine for a private folder on your streaming PC; bad as a public download
+
+Put sound files in `dist\TwitchBot\sounds\`.
+

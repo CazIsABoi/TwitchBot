@@ -1,1 +1,65 @@
-<html><body style='background:transparent;'></body></html>
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            html, body {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                background: transparent;
+            }
+            body {
+                pointer-events: none;
+            }
+            
+            #fireworks_fireworks-b66bb87184ae4d188fde1cf75c93ab5c {
+                position: fixed;
+                inset: 0;
+                width: 100vw;
+                height: 100vh;
+                object-fit: contain;
+                pointer-events: none;
+                opacity: 1;
+                animation: fadeOutAll_fireworks-b66bb87184ae4d188fde1cf75c93ab5c 15.000s linear forwards;
+            }
+            #announcement_fireworks-b66bb87184ae4d188fde1cf75c93ab5c {
+                position: fixed;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                width: 90vw;
+                max-width: 1400px;
+                color: #ffffff;
+                font-family: 'Arial Black', sans-serif;
+                font-size: clamp(40px, 6vw, 92px);
+                text-align: center;
+                text-shadow:
+                    0 0 12px rgba(0, 0, 0, 0.9),
+                    0 0 24px rgba(0, 0, 0, 0.8),
+                    4px 4px 0 #000;
+                opacity: 1;
+                animation: popIn_fireworks-b66bb87184ae4d188fde1cf75c93ab5c 0.35s ease-out, fadeOutAll_fireworks-b66bb87184ae4d188fde1cf75c93ab5c 15.000s linear forwards;
+            }
+            @keyframes popIn_fireworks-b66bb87184ae4d188fde1cf75c93ab5c {
+                0% { transform: translate(-50%, -50%) scale(0.7); opacity: 0; }
+                100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            }
+            @keyframes fadeOutAll_fireworks-b66bb87184ae4d188fde1cf75c93ab5c {
+                0% { opacity: 1; }
+                66% { opacity: 1; }
+                100% { opacity: 0; }
+            }
+        
+        </style>
+    </head>
+    <body>
+        
+            <img id="fireworks_fireworks-b66bb87184ae4d188fde1cf75c93ab5c" src="http://127.0.0.1:8765/images/fireworks.gif?v=5d3a96bdb6304587aeaebcc29055a903" alt="fireworks" />
+            <div id="announcement_fireworks-b66bb87184ae4d188fde1cf75c93ab5c">cazisaboi was the first chatter</div>
+        
+    </body>
+    </html>
+    

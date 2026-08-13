@@ -625,6 +625,7 @@ async def spelling_bee(redemption, params):
             "Spelling challenge failed to load a word.",
             base_voice="female",
             speaker="Spelling Bee",
+            show_caption=False,
         )
         return
 
@@ -641,8 +642,8 @@ async def spelling_bee(redemption, params):
         reveal_word=False,
     )
     # Definition is shown in the local dialog only — do not read it aloud.
-    await parse_and_speak("Spell this word.", base_voice="female", speaker="Spelling Bee")
-    await parse_and_speak(word, base_voice="female", speaker="Spelling Bee")
+    await parse_and_speak("Spell this word.", base_voice="female", speaker="Spelling Bee", show_caption=False)
+    await parse_and_speak(word, base_voice="female", speaker="Spelling Bee", show_caption=False)
 
     answer = None
     while True:
@@ -657,7 +658,7 @@ async def spelling_bee(redemption, params):
                 reveal_word=False,
             )
             # Just replay the word — no extra "listen again" line.
-            await parse_and_speak(word, base_voice="female", speaker="Spelling Bee")
+            await parse_and_speak(word, base_voice="female", speaker="Spelling Bee", show_caption=False)
             continue
         break
 
@@ -675,6 +676,7 @@ async def spelling_bee(redemption, params):
             f"No spelling was entered. The word was {word}.",
             base_voice="female",
             speaker="Spelling Bee",
+            show_caption=False,
         )
         return
 
@@ -705,7 +707,7 @@ async def spelling_bee(redemption, params):
             f"attempt={attempted_word} expected={word}"
         )
 
-    await parse_and_speak(confirmation, base_voice="female", speaker="Spelling Bee")
+    await parse_and_speak(confirmation, base_voice="female", speaker="Spelling Bee", show_caption=False)
 
 
 # ---------------------------------------------------------------------------
